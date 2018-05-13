@@ -1,0 +1,178 @@
+#!/usr/bin/env python
+#
+# by Holger Doebler <stephaho@informatik.hu-berlin.de>
+#
+# This python script is intended to help in verification of your solution
+# of the Sommersemester 2018 Digitale Systeme C Programmierprojekt.
+#
+#
+# THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESSED OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+# BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+from __future__ import with_statement
+from itertools import chain
+import sys
+
+def print_help_message():
+    print("""Usage: check_result [-q|-qq] INPUT|SAMPLE_OUTPUT YOUR_OUTPUT
+
+    Depending on the first file given, checks for errors in the file
+    given as second argument.
+
+ARGUMENTS (required)
+    If the first argument is a sample output file as provided, it
+    checks whether SAMPLE_OUTPUT and YOUR_OUTPUT are compatible.
+
+    If the first argument is an input file, check_result will check
+    whether YOUR_OUTPUT is a correct 1x2-tiling of the area defined by
+    INPUT. Note that check_result will not perform any checks, if
+    YOUR_OUTPUT states 'None', i.e., if your 'solution' is that there
+    does not exist a 1x2 tiling of the INPUT.
+
+    If YOUR_OUTPUT is either "-" or omitted, it is read from stdin.
+
+OPTIONS
+    -q      Only report errors. Suppress output PASSED and FAILED and INFO.
+    -qq     Suppress all output. Exit code is the only feedback.
+
+WARNING
+    This script is intended to be portable across platforms and python
+    versions. IMHO it does not qualify as well-written modern
+    python. Use this script as it is. Trying to replicate any of its
+    functionality, e.g. reading the input, as part of your solution is
+    probably a very bad idea.
+
+EXIT CODES:
+    0     Test passed. YOUR_OUTPUT seems to be correct.
+    1     Uncaught exception. Please send a bug report.
+    2     Invocation / IO error
+    10-16 Malicious input file content. Input file itself cannot be correct.
+    20    Cannot perform any checks. YOUR_OUTPUT is "None", which might be
+          correct.
+    21    Test failed. YOUR_OUTPUT is wrong.
+
+
+Send bug reports and suggestions for improvement to
+Holger Doebler <stephaho@informatik.hu-berlin.de>
+""")
+    sys.exit(2)
+
+verbosity = 2
+def pre(s):
+    if verbosity > 0:
+        print('ERROR: ' + s)
+
+def pri(s):
+    if verbosity > 1:
+        print(s)
+
+def read_tile_file(path, allow_input_file):
+    if path == '-':
+        f = sys.stdin
+    else:
+        try:
+            f = open(path)
+        except IOError:
+            print_help_message()
+    with f:
+        i = iter(f)
+        try:
+            l = next(i)
+        except UnicodeDecodeError:
+            pre('File "%s" contains illegal character.' % (path,))
+            sys.exit(15)
+        except StopIteration:
+            pre('file "%s" seems to be empty.' % path)
+            sys.exit(2)
+        if l.strip() == 'None':
+            try:
+                l = next(i)
+            except UnicodeDecodeError:
+                pre('File "%s" line #%d contains illegal character.' % (path, 1))
+                sys.exit(15)
+            except StopIteration:
+                return ('solution', None)
+            pre('file "%s" line "None" followed by further illegal lines.'
+                  % path)
+            sys.exit(10)
+        lines = chain([l], i)
+        read_input_file = False
+        if allow_input_file:
+            read_input_file = True
+            try:
+                xy = tuple(map(int, l.split()))
+                if len(xy) != 2:
+                    read_input_file = False
+            except ValueError:
+                read_input_file = False
+        res = set()
+        if read_input_file:
+            for j,l in enumerate(lines, start=1):
+                try:
+                    xy = tuple(map(int, l.split()))
+                except ValueError:
+                    xy = ()
+                if len(xy) != 2 or xy[0] < 0 or xy[1] < 0:
+                    pre('File %s line #%d does not have the correct '
+                          'input file format.' % (path, j))
+                    sys.exit(14)
+                if xy in res:
+                    pre('File "%s" line #%d is a duplicate.' % (path, j))
+                    sys.exit(15)
+                res.add(xy)
+            return ('input', res)
+        else:
+            for j,l in enumerate(lines, start=1):
+                try:
+                    (x1,y1),(x2,y2) = tuple((tuple(map(int,x.split()))
+                                             for x in l.split(';')))
+                    if any([z < 0 for z in (x1,y1,x2,y2)]):
+                        raise ValueError
+                except ValueError:
+                    pre('Illegal line format in file "%s" line #%d.'
+                          % (path, j))
+                    sys.exit(11)
+                if (x1!=x2 and y1!=y2) or (x1==x2 and y1==y2):
+                    pre('File "%s" line #%d does not describe a 1x2tile.'
+                        % (path, j))
+                    sys.exit(12)
+                for xy in ((x1,y1),(x2,y2)):
+                    if xy in res:
+                        pre('Tile in file "%s" line #%d overlaps with '
+                              'other tiles in this file.' % (path, j))
+                        sys.exit(13)
+                    res.add(xy)
+            return ('solution', res)
+
+if __name__=='__main__':
+    for verb, flag in enumerate(('-qq', '-q')):
+        while flag in sys.argv:
+            verbosity = verb
+            sys.argv.remove(flag)
+    if len(sys.argv) == 2:
+        sys.argv.append('-')
+    if len(sys.argv) != 3:
+        print_help_message()
+    t1 = read_tile_file(sys.argv[1], True)
+    t2 = read_tile_file(sys.argv[2], False)
+    if t1[1] == t2[1]:
+        pri('PASSED')
+        sys.exit(0)
+    if t2[1] is None and t1[0] == 'input':
+        pri('INFO: "%s" is an input file and "%s" sais "None". Cannot check '
+              'whether this is the correct answer.'
+              % tuple(sys.argv[1:]))
+        sys.exit(20)
+    else:
+        pri('FAILED')
+        sys.exit(21)
