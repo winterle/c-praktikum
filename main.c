@@ -3,18 +3,26 @@
 #include <math.h>
 #include <memory.h>
 #include <time.h>
+#include <errno.h>
 
 #define ERROR_CODE (-1)
+#define SUCCESS_CODE 0
 #define UNKNOWN_CHAR 2
-#define UINT_OVERFLOW 3
-#define TOO_MANY_NUMBERS 4
-#define NOT_ENOUGH_NUMBERS 5
+#define ULONG_OVERFLOW 3
+#define WRONG_NUMBER_COUNT 4
+#define INIT_SIZE 512
+#define BUF_LEN 1024
 /* global variables and structs */
-
+char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
+size_t provisionalDataStructSize;
+unsigned long *provisionalDataStruct = NULL;
+unsigned long reallocCounter;
 /* function declarations */
-void die(unsigned short error_num);
-unsigned short getNextLine(char *num0,char *num1);
+void die(int error_num);
+int getNextLine();
 void parseInput();
+void checkLineSanity();
+void parseLine(unsigned long lineNumber);
 
 
 int main() {
@@ -23,15 +31,12 @@ int main() {
 }
 
 void parseInput(){
-    unsigned short rc;
-    char num0[11];
-    char num1[11];
-    while((rc = getNextLine(num0,num1))!=1) {
-        if (rc != 0) {
-            die(rc);
-        };
-        printf("num0 = %s , num1 = %s\n",num0,num1);
+    unsigned long lineNumber = 0;
+    while(getNextLine()!=ERROR_CODE){
+        checkLineSanity();
+        parseLine(lineNumber++);
     }
+    printf("%ld reallocs executed",reallocCounter);
 }
 
 /**
@@ -39,66 +44,76 @@ void parseInput(){
  * @param 2 Arrays of length 11 to save the parsed numbers in. Any other length results in undefined behavior!
  * @returns 0 on success, 1 when reaching EOF, defined error codes when encountering errors
  * */
-unsigned short getNextLine(char *num0,char *num1){
-    char c;
-    num0[10] = num1[10] = '\0';
-    num0[0] = num1[0] = '\0'; //to check if the second number was actually read
-    short numbersRead = 0;
-    short lastRead = 0; //boolean: lastRead char was /n or blank: 0, else 1
-    char *pos = num0;
-    while((c=fgetc(stdin))!='\n' && c != EOF){
-        if(c == ' ' && lastRead==1){
-            lastRead=0;
-            pos = num1;
-            numbersRead++;
-        }
-        if(c == ' '){
-            lastRead=0;
-            continue;
-        }
-        if(c < 48 || c > 57){
-            return UNKNOWN_CHAR;
-        }
-        if(!numbersRead){
-            lastRead = 1;
-            if(pos == &num0[10])//read number is too long
-                return UINT_OVERFLOW;
-            *pos = c;
-            pos++;
-            *pos = '\0';
-        }
-        else if(numbersRead == 1){
-            lastRead = 1;
-            if(pos == &num0[10])//read number is too long
-                return UINT_OVERFLOW;
-            *pos = c;
-            pos++;
-            *pos = '\0';
-        }
-        else if(numbersRead > 1)
-            return TOO_MANY_NUMBERS;
+int getNextLine(){
+    buf[BUF_LEN-1] = 'x';
+    if(fgets(buf,sizeof(buf),stdin) == NULL)return ERROR_CODE;
+    if(buf[BUF_LEN-1] != 'x'){
+        //TODO:handle this!
+        printf("fgets didnt get all chars in one line!\n");
+        exit(-1);
     }
-    if(c == EOF){
-        return 1;
-    }
-    if(num1[0] == '\0' || num0[0] == '\0'){
-        return NOT_ENOUGH_NUMBERS;
-    }
-    return 0;
+    printf("%s -->   ",buf);
+    return SUCCESS_CODE;
 }
 
-void die(unsigned short error_num){
+void checkLineSanity(){
+    int pos = 0;
+    char last = '\0';
+    int numCount = 0;
+    while(buf[pos]!='\0' && buf[pos]!='\n') {
+        if (buf[pos] == ' ') {
+            last = buf[pos++];
+            continue;
+        }
+        if ((unsigned int) buf[pos] < 48 || (unsigned int) buf[pos] > 57) {
+        printf("FOUND [%c]\n", buf[pos]);
+        die(UNKNOWN_CHAR);
+        }
+        if(last == ' ' || last == '\0')numCount++;
+        last = buf[pos++];
+    }
+    if(numCount!=2)die(WRONG_NUMBER_COUNT);
+}
+
+void parseLine(unsigned long lineNumber) {
+    if (provisionalDataStruct == NULL){
+        provisionalDataStruct = malloc(INIT_SIZE*sizeof(unsigned long));
+        provisionalDataStructSize = INIT_SIZE*sizeof(unsigned long);
+        reallocCounter = 0;
+    }
+    if(provisionalDataStructSize/sizeof(unsigned long)<=lineNumber*2){
+        reallocCounter++;
+        provisionalDataStructSize*=2;
+        provisionalDataStruct = realloc(provisionalDataStruct,provisionalDataStructSize);
+        printf("\n\n-----------REALLOC!--------\n\n");
+        if(provisionalDataStruct == NULL){printf("realloc failed\n");}
+        printf("SIZE:%ld\n",sizeof(provisionalDataStruct));
+    }
+    char *endptr = NULL;
+    errno = 0;
+    provisionalDataStruct[lineNumber * 2] = strtoul(buf, &endptr, 10);
+    printf("%ld   ", provisionalDataStruct[lineNumber*2]);
+    if (errno == ERANGE) {
+        die(ULONG_OVERFLOW);
+    }
+    if (errno != 0 || endptr==NULL)die(ERROR_CODE);
+    provisionalDataStruct[lineNumber * 2+1] = strtoul(endptr,&endptr,10);
+    printf("%ld   \n", provisionalDataStruct[lineNumber*2+1]);
+    if (errno == ERANGE) {
+        die(ULONG_OVERFLOW);
+    }
+    if (errno != 0 || endptr==NULL)die(ERROR_CODE);
+}
+
+void die(int error_num){
     if(error_num==UNKNOWN_CHAR) {
         fprintf(stderr, "Unknown character, exiting...\n");
     }
-    else if(error_num==UINT_OVERFLOW){
+    else if(error_num==ULONG_OVERFLOW){
         fprintf(stderr,"Number too big!\n");
     }
-    else if(error_num==TOO_MANY_NUMBERS){
-        fprintf(stderr,"Too many Numbers in one Line, exiting...\n");
-    }
-    else if(error_num==NOT_ENOUGH_NUMBERS){
-        fprintf(stderr,"Not enough Numbers in one Line, exiting...\n");
+    else if(error_num==WRONG_NUMBER_COUNT){
+        fprintf(stderr,"Too many or not enough Numbers in one Line, exiting...\n");
     }
     else{
         fprintf(stderr, "An unknown error occured, exiting...\n");
