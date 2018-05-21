@@ -3,6 +3,7 @@
 #include <math.h>
 #include <memory.h>
 #include <time.h>
+#include <sys/types.h>
 #include <errno.h>
 
 #define ERROR_CODE (-1)
@@ -17,23 +18,45 @@ char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
 size_t provisionalDataStructSize;
 unsigned long *provisionalDataStruct;
 unsigned long reallocCounter;
+unsigned long lineNumber;
 /* function declarations */
 void die(int error_num);
 int getNextLine();
 void checkLineSanity();
 void parseLine(unsigned long lineNumber);
 void parseInput();
+int compareFunction(const void *a, const void *b);
 
 
 int main(){
+
 	parseInput();
+    qsort(provisionalDataStruct,lineNumber, sizeof(unsigned long)*2,&compareFunction);
+    for(unsigned long i = 0; i < 2*lineNumber; i+=2){
+        printf("%ld    %ld\n",provisionalDataStruct[i],provisionalDataStruct[i+1]);
+    }
 	free(provisionalDataStruct);
 	return 0;
 }
 
+int compareFunction(const void *a, const void *b){
+    if(*(const unsigned long *)a > *(const unsigned long *)b){
+        return 1;
+    }
+    if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
+    else{
+        const unsigned long *ay = (const unsigned long *)a + 1;
+        const unsigned long *by = (const unsigned long *)b + 1;
+        if(*ay>*by)return 1;
+        if(*ay<*by)return -1;
+        else {printf("double value detected!\n");
+        return 0;}
+    }
+}
+
 
 void parseInput(){
-    unsigned long lineNumber = 0;
+    lineNumber = 0;
     while(getNextLine()!=ERROR_CODE){
         checkLineSanity();
         parseLine(lineNumber++);
