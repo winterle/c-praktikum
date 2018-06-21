@@ -15,10 +15,23 @@
 #define BUF_LEN 1024
 /* global variables and structs */
 char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
+
+/*todo list
+ * add buffer overflow handler
+ * fix reallocing too much
+ * */
+typedef struct node_s{
+    unsigned long x;
+    unsigned long y;
+    struct node_s *up,*down,*left,*right;
+}node_t;
+
 size_t provisionalDataStructSize;
-unsigned long *provisionalDataStruct;
+node_t *provisionalDataStruct;
 unsigned long reallocCounter;
 unsigned long lineNumber;
+
+
 
 unsigned long * space;
 unsigned long * sameSpaces;
@@ -37,21 +50,27 @@ int main(){
 
 	parseInput();
 
-    qsort(provisionalDataStruct,lineNumber, sizeof(unsigned long)*2,&compareFunction);
-
+    qsort(provisionalDataStruct,lineNumber, sizeof(node_t),&compareFunction);
+    for(int i = 0; i < lineNumber; i++){
+        printf("%ld   %ld\n",provisionalDataStruct[i].x,provisionalDataStruct[i].y);
+    }
+    /*
     partitionNew();
     for(unsigned long i = 0; i < 2*lineNumber; i+=2){
         printf("%ld    %ld , space = %ld \n",provisionalDataStruct[i],provisionalDataStruct[i+1],space[i/2]);
     }
 
     printf("%ld * 2  = %ld numbers parsed and sorted\n",lineNumber,lineNumber*2);
+    */
 
-
+    printf("Size in element count of provDataStruct = %ld\n", provisionalDataStructSize/sizeof(node_t));
+    printf("total parsed lines = %ld\n",lineNumber);
 	free(provisionalDataStruct);
 	return 0;
 }
 
 void partitionNew(){
+    /*
     space = malloc(lineNumber*sizeof(unsigned long));
     sameSpaces = malloc(lineNumber*sizeof(unsigned long));
     unsigned long spaceCtr = 0;
@@ -84,7 +103,7 @@ void partitionNew(){
         }
     }
     //TODO find overlapping spaces w/different x
-    /*for(int i = 0; i < xCounter; i++){
+    for(int i = 0; i < xCounter; i++){
 
     }
     */
@@ -92,6 +111,7 @@ void partitionNew(){
 }
 
 void partition(){//TODO space array is space-inefficient
+    /*
     space = malloc(lineNumber*sizeof(unsigned long));
     sameSpaces = malloc(lineNumber*sizeof(unsigned long));
     unsigned long sameSpacesCtr = 0;
@@ -141,6 +161,7 @@ void partition(){//TODO space array is space-inefficient
         }
         lastXStart = provisionalDataStruct+=oldI;
     }
+     */
 }
 
 int compareFunction(const void *a, const void *b){
@@ -149,12 +170,15 @@ int compareFunction(const void *a, const void *b){
     }
     if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
     else{
-        const unsigned long *ay = (const unsigned long *)a + 1;
-        const unsigned long *by = (const unsigned long *)b + 1;
+        const unsigned long *ay = ((const unsigned long *)a) + 1;
+        const unsigned long *by = ((const unsigned long *)b) + 1;
         if(*ay>*by)return 1;
         if(*ay<*by)return -1;
-        else {printf("double value detected!\n");
-        return 0;}
+        else {
+            printf("double value detected!\n");
+            printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
+            return 0;
+        }
     }
 }
 
@@ -204,11 +228,11 @@ void checkLineSanity(){
 
 void parseLine(unsigned long lineNumber) {
     if (lineNumber == 0){
-        provisionalDataStruct = malloc(INIT_SIZE*sizeof(unsigned long));
-        provisionalDataStructSize = INIT_SIZE*sizeof(unsigned long);
+        provisionalDataStruct = malloc(INIT_SIZE*sizeof(node_t));
+        provisionalDataStructSize = INIT_SIZE*sizeof(node_t);
         reallocCounter = 0;
     }
-    if(provisionalDataStructSize/sizeof(unsigned long)<=lineNumber*2){
+    if(provisionalDataStructSize/sizeof(node_t)<=lineNumber*2){
         reallocCounter++;
         provisionalDataStructSize*=2;
         provisionalDataStruct = realloc(provisionalDataStruct,provisionalDataStructSize);
@@ -216,17 +240,16 @@ void parseLine(unsigned long lineNumber) {
     }
     char *endptr = NULL;
     errno = 0;
-    provisionalDataStruct[lineNumber * 2] = strtoul(buf, &endptr, 10);
+    provisionalDataStruct[lineNumber*2].x = strtoul(buf, &endptr, 10);
 
-    printf("%ld   ", provisionalDataStruct[lineNumber*2]);
-
+    printf("%ld   ", provisionalDataStruct[lineNumber*2].x);
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
     }
     if (errno != 0 || endptr==NULL)die(ERROR_CODE);
-    provisionalDataStruct[lineNumber * 2+1] = strtoul(endptr,&endptr,10);
+    provisionalDataStruct[lineNumber * 2+1].y = strtoul(endptr,&endptr,10);
 
-    printf("%ld   \n", provisionalDataStruct[lineNumber*2+1]);
+    printf("%ld   \n", provisionalDataStruct[lineNumber*2+1].y);
 
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
