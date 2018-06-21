@@ -19,22 +19,22 @@ char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
 /*todo list
  * add buffer overflow handler
  * fix reallocing too much
+ * space partitioning (needed?)
  * */
+
+
 typedef struct node_s{
     unsigned long x;
     unsigned long y;
-    struct node_s *up,*down,*left,*right;
+    struct node_s *up,*down,*left,*right,*matchingPartner;
 }node_t;
 
-size_t provisionalDataStructSize;
-node_t *provisionalDataStruct;
+size_t graphSize;
+node_t *graph;
 unsigned long reallocCounter;
 unsigned long lineNumber;
 
 
-
-unsigned long * space;
-unsigned long * sameSpaces;
 /* function declarations */
 void die(int error_num);
 int getNextLine();
@@ -42,127 +42,139 @@ void checkLineSanity();
 void parseLine(unsigned long lineNumber);
 void parseInput();
 int compareFunction(const void *a, const void *b);
-void partition();
 void partitionNew();
 void getSameSpace(unsigned long ax, unsigned long ay, unsigned long bx, unsigned long by);
+void findShortestAugmentations();
+int checkDone();
 
 int main(){
 
 	parseInput();
 
-    qsort(provisionalDataStruct,lineNumber, sizeof(node_t),&compareFunction);
-    for(int i = 0; i < lineNumber; i++){
-        printf("%ld   %ld\n",provisionalDataStruct[i].x,provisionalDataStruct[i].y);
-    }
-    /*
+    qsort(graph,lineNumber, sizeof(node_t),&compareFunction);
     partitionNew();
-    for(unsigned long i = 0; i < 2*lineNumber; i+=2){
-        printf("%ld    %ld , space = %ld \n",provisionalDataStruct[i],provisionalDataStruct[i+1],space[i/2]);
+    findShortestAugmentations();
+    for(int i = 0; i < lineNumber; i++){
+        printf("%ld    %ld",graph[i].x,graph[i].y);
+        //if(graph[i].match)printf("  match =  %ld  %ld",((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->x,((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->y);
+        printf("\n");
     }
-
-    printf("%ld * 2  = %ld numbers parsed and sorted\n",lineNumber,lineNumber*2);
-    */
-
-    printf("Size in element count of provDataStruct = %ld\n", provisionalDataStructSize/sizeof(node_t));
+    if(checkDone())printf("found perfect matchings only using depth 1\n");
+    else printf("not done, need to check for deeper augmentations\n");
+    printf("Size in element count of provDataStruct = %ld\n", graphSize/sizeof(node_t));
     printf("total parsed lines = %ld\n",lineNumber);
-	free(provisionalDataStruct);
+	free(graph);
 	return 0;
 }
 
+int checkDone(){
+    for(int i = 0; i < lineNumber; i++){
+        if(graph[i].matchingPartner==NULL) {
+            printf("%ld   %ld is not matched!\n",graph[i].x,graph[i].y);
+            continue;
+        }
+    }
+    return 1;
+}
+
+void breathFirstSearch(){
+    node_t **menge = malloc(sizeof(node_t *)*lineNumber); //this is worst case space complexity
+    memset(menge,0,sizeof(node_t *)*lineNumber);
+    unsigned int index = 0;
+    for(int i = 0; i < lineNumber; i++){
+        if(graph[i].matchingPartner == NULL){
+            menge[index++] = &graph[i];
+        }
+    }
+    /*now we replace the elements w/ their resp. neighbors and check, if any are unmatched, then we can invert the matchings and continue, ...*/
+    /*else we set menge = neighbors of elements and start over*/
+}
+
+void findShortestAugmentations(){
+
+    for(int i = 0; i < lineNumber; i++){
+        if(graph[i].matchingPartner == NULL){
+            if(graph[i].left != NULL){
+                if(graph[i].left->matchingPartner == NULL){
+                    printf("match: %ld, %ld  ---  %ld, %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
+                    graph[i].left->matchingPartner = graph[i].left->right;
+                    graph[i].matchingPartner = graph[i].left;
+                    continue;
+                }
+            }
+            if(graph[i].down != NULL){
+                if(graph[i].down->matchingPartner == NULL){
+                    printf("match: %ld, %ld  ---  %ld, %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
+                    graph[i].down->matchingPartner = graph[i].down->up;
+                    graph[i].matchingPartner = graph[i].down;
+                    continue;
+                }
+            }
+        }
+    }
+}
+
+
+
 void partitionNew(){
-    /*
-    space = malloc(lineNumber*sizeof(unsigned long));
-    sameSpaces = malloc(lineNumber*sizeof(unsigned long));
-    unsigned long spaceCtr = 0;
-    short firstXElement;
-    unsigned long xCounter = 0;
-    for(unsigned long i = 0; i < lineNumber*2;){
-        xCounter++;
-        unsigned long x = provisionalDataStruct[i];
-        firstXElement = 1;
-        while(provisionalDataStruct[i] == x){
-            //printf("i = %ld,x = %ld\n",i,x);
-            if(firstXElement){
-                //printf("first element: new space = %ld\n",spaceCtr);
-                space[i/2] = spaceCtr;
-                spaceCtr++;
-            }
-            else{
-                if(provisionalDataStruct[i+1] - provisionalDataStruct[i-1] == 1){
-                    //printf("sameSpace found: %ld(%ld) - %ld = %ld \n",provisionalDataStruct[i+1],i+1,provisionalDataStruct[i-1],(provisionalDataStruct[i+1]-provisionalDataStruct[i-1]));
-                    space[i/2] = space[(i-2)/2];
-                }
-                else{
-                    //printf("not in the same space new space = %ld\n",spaceCtr);
-                    space[i/2] = spaceCtr;
-                    spaceCtr++;
+    /*find y-neighbours*/
+    for(int i = 0; i < lineNumber; i++){
+        unsigned long x = graph[i].x;
+        if(graph[i].down == NULL){
+            /*the x-value has to remain the same*/
+            for(int j = i+1; graph[j].x == x; j++){
+                if(graph[j].y == graph[i].y-1){
+                    //they are neighbors
+                    graph[j].up = &graph[i];
+                    graph[i].down = &graph[j];
                 }
             }
-            firstXElement = 0;
-            i+=2;
         }
-    }
-    //TODO find overlapping spaces w/different x
-    for(int i = 0; i < xCounter; i++){
-
-    }
-    */
-
-}
-
-void partition(){//TODO space array is space-inefficient
-    /*
-    space = malloc(lineNumber*sizeof(unsigned long));
-    sameSpaces = malloc(lineNumber*sizeof(unsigned long));
-    unsigned long sameSpacesCtr = 0;
-    unsigned long *lastXStart = NULL;
-    unsigned long x;
-    unsigned long spaceCtr = 0;
-    space[0] = spaceCtr++;
-    short sameSpace = 0; //boolean, if kachel is in same space considering only y-values
-    short sameSpaceBefore = 0; //boolean, if kachel is in same space considering also x-1 values
-    for(unsigned long i = 0; i < lineNumber*2; i+=2){ //alle elemente einmal anschauen -> = O(n) bis jetzt
-        x = provisionalDataStruct[i];
-        printf("partition: for, x = %ld\n",x);
-        unsigned long oldI = i;
-        while(provisionalDataStruct[i] == x){
-            //printf("partition: while with i = %ld\n",i);
-            sameSpace = 0;
-            sameSpaceBefore = 0;
-            if(lastXStart != NULL){
-                for(unsigned long j = 0; lastXStart[j+1]<= provisionalDataStruct[i+1];j+=2){
-                    if(lastXStart[j+1] == provisionalDataStruct[i+1]) {
-                        space[i/2] = space[(&provisionalDataStruct[i+1]-&lastXStart[j+1])/2];
-                        sameSpaceBefore = 1;
+        if(graph[i].up == NULL){
+            for(int j = i+1; graph[j].x == x; j++){
+                if(graph[j].y == graph[i].y+1){
+                    //neighbors
+                    graph[j].down = &graph[i];
+                    graph[i].up = &graph[j];
+                }
+            }
+        }
+        //fixme: are those checkings for out of bounds correct? pointer arithmetic...
+        if(graph[i].left == NULL){
+            /*now it's getting abit complicated, since we have to check the intervals of x-1 and x+1 for same y-values, so we first try to find
+             * the starting index of these intervals and then check, this is also a point where some optimisation (preprocessing?) could come in handy*/
+            node_t *xless = &graph[i];
+            while(xless->x == x && (xless - graph))xless-=1;
+            if(xless->x == x);//do nothing, since there is no interval w/ x-1 values
+            else{
+                while(xless->x == x-1 && (xless- graph)){
+                    if(xless->y == graph[i].y){//found neighbours
+                        xless->right = &graph[i];
+                        graph[i].left = xless;
                     }
+                    xless-=1;
                 }
             }
-            if(i!=oldI) {
-                if (provisionalDataStruct[i + 1] - provisionalDataStruct[i - 1] == 1) {
-                    sameSpace = 1;
-                }
-            }
-            if(sameSpaceBefore && sameSpace){
-                sameSpaces[sameSpacesCtr++] = space[i/2];
-                sameSpaces[sameSpacesCtr++] = space[(i-2)/2];
-            }
-            else if(sameSpace){
-                space[i/2] = space[(i-2)/2];
-            }
-            else if(sameSpaceBefore){
-                i+=2;
-                continue;
-            }
+            /*now reusing xless value, therefore naming inconsistent*/
+            xless = &graph[i];
+            while(xless->x == x && (xless-graph)<= lineNumber)xless+=1;
+            if(xless->x == x);//do nothing, since there is no interval w/ x+1 values
             else{
-                space[i/2] = spaceCtr++;
+                while(xless->x == x+1 && (xless-graph)<= lineNumber){
+                    if(xless->y == graph[i].y){//found neighbours
+                        xless->left = &graph[i];
+                        graph[i].right = xless;
+                    }
+                    xless+=1;
+                }
             }
 
-            i+=2;
         }
-        lastXStart = provisionalDataStruct+=oldI;
+
     }
-     */
+
 }
+
 
 int compareFunction(const void *a, const void *b){
     if(*(const unsigned long *)a > *(const unsigned long *)b){
@@ -170,14 +182,14 @@ int compareFunction(const void *a, const void *b){
     }
     if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
     else{
-        const unsigned long *ay = ((const unsigned long *)a) + 1;
-        const unsigned long *by = ((const unsigned long *)b) + 1;
+        const unsigned long *ay = (const unsigned long *)a + 1;
+        const unsigned long *by = (const unsigned long *)b + 1;
         if(*ay>*by)return 1;
         if(*ay<*by)return -1;
         else {
             printf("double value detected!\n");
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
-            return 0;
+            exit(-1);
         }
     }
 }
@@ -228,33 +240,35 @@ void checkLineSanity(){
 
 void parseLine(unsigned long lineNumber) {
     if (lineNumber == 0){
-        provisionalDataStruct = malloc(INIT_SIZE*sizeof(node_t));
-        provisionalDataStructSize = INIT_SIZE*sizeof(node_t);
+        graph = malloc(INIT_SIZE*sizeof(node_t));
+        graphSize = INIT_SIZE*sizeof(node_t);
         reallocCounter = 0;
     }
-    if(provisionalDataStructSize/sizeof(node_t)<=lineNumber*2){
+    if(graphSize/sizeof(node_t)<=lineNumber*2){
         reallocCounter++;
-        provisionalDataStructSize*=2;
-        provisionalDataStruct = realloc(provisionalDataStruct,provisionalDataStructSize);
-        if(provisionalDataStruct == NULL){printf("realloc failed\n");die(-1);}
+        graphSize*=2;
+        graph = realloc(graph,graphSize);
+        if(graph == NULL){printf("realloc failed\n");die(-1);}
     }
     char *endptr = NULL;
     errno = 0;
-    provisionalDataStruct[lineNumber*2].x = strtoul(buf, &endptr, 10);
+    graph[lineNumber].x = strtoul(buf, &endptr, 10);
 
-    printf("%ld   ", provisionalDataStruct[lineNumber*2].x);
+    printf("%ld   ", graph[lineNumber].x);
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
     }
     if (errno != 0 || endptr==NULL)die(ERROR_CODE);
-    provisionalDataStruct[lineNumber * 2+1].y = strtoul(endptr,&endptr,10);
+    graph[lineNumber].y = strtoul(endptr,&endptr,10);
 
-    printf("%ld   \n", provisionalDataStruct[lineNumber*2+1].y);
+    printf("%ld   \n", graph[lineNumber].y);
 
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
     }
     if (errno != 0 || endptr==NULL)die(ERROR_CODE);
+    /*set neighbor pointers to NULL*/
+    memset((unsigned long*)&graph[lineNumber]+2,0,sizeof(node_t *)*5);
 }
 
 void die(int error_num){
@@ -272,3 +286,4 @@ void die(int error_num){
     }
     exit(ERROR_CODE);
 }
+
