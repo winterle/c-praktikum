@@ -43,7 +43,6 @@ void parseLine(unsigned long lineNumber);
 void parseInput();
 int compareFunction(const void *a, const void *b);
 void partitionNew();
-void getSameSpace(unsigned long ax, unsigned long ay, unsigned long bx, unsigned long by);
 void findShortestAugmentations();
 int checkDone();
 
@@ -54,15 +53,18 @@ int main(){
     qsort(graph,lineNumber, sizeof(node_t),&compareFunction);
     partitionNew();
     findShortestAugmentations();
+    /*
     for(int i = 0; i < lineNumber; i++){
         printf("%ld    %ld",graph[i].x,graph[i].y);
         //if(graph[i].match)printf("  match =  %ld  %ld",((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->x,((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->y);
         printf("\n");
     }
+     */
     if(checkDone())printf("found perfect matchings only using depth 1\n");
     else printf("not done, need to check for deeper augmentations\n");
     printf("Size in element count of provDataStruct = %ld\n", graphSize/sizeof(node_t));
     printf("total parsed lines = %ld\n",lineNumber);
+
 	free(graph);
 	return 0;
 }
@@ -77,18 +79,7 @@ int checkDone(){
     return 1;
 }
 
-void breathFirstSearch(){
-    node_t **menge = malloc(sizeof(node_t *)*lineNumber); //this is worst case space complexity
-    memset(menge,0,sizeof(node_t *)*lineNumber);
-    unsigned int index = 0;
-    for(int i = 0; i < lineNumber; i++){
-        if(graph[i].matchingPartner == NULL){
-            menge[index++] = &graph[i];
-        }
-    }
-    /*now we replace the elements w/ their resp. neighbors and check, if any are unmatched, then we can invert the matchings and continue, ...*/
-    /*else we set menge = neighbors of elements and start over*/
-}
+
 
 void findShortestAugmentations(){
 
@@ -96,7 +87,7 @@ void findShortestAugmentations(){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
                 if(graph[i].left->matchingPartner == NULL){
-                    printf("match: %ld, %ld  ---  %ld, %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
+                    printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
                     graph[i].left->matchingPartner = graph[i].left->right;
                     graph[i].matchingPartner = graph[i].left;
                     continue;
@@ -104,7 +95,7 @@ void findShortestAugmentations(){
             }
             if(graph[i].down != NULL){
                 if(graph[i].down->matchingPartner == NULL){
-                    printf("match: %ld, %ld  ---  %ld, %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
+                    printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
                     graph[i].down->matchingPartner = graph[i].down->up;
                     graph[i].matchingPartner = graph[i].down;
                     continue;
@@ -201,7 +192,7 @@ void parseInput(){
         checkLineSanity();
         parseLine(lineNumber++);
     }
-    printf("%ld reallocs executed\n",reallocCounter);
+    //printf("%ld reallocs executed\n",reallocCounter);
 }
 
 /**
@@ -254,14 +245,14 @@ void parseLine(unsigned long lineNumber) {
     errno = 0;
     graph[lineNumber].x = strtoul(buf, &endptr, 10);
 
-    printf("%ld   ", graph[lineNumber].x);
+    //printf("%ld   ", graph[lineNumber].x);
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
     }
     if (errno != 0 || endptr==NULL)die(ERROR_CODE);
     graph[lineNumber].y = strtoul(endptr,&endptr,10);
 
-    printf("%ld   \n", graph[lineNumber].y);
+    //printf("%ld   \n", graph[lineNumber].y);
 
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
