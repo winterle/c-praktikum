@@ -13,14 +13,15 @@
 #define WRONG_NUMBER_COUNT 4
 #define INIT_SIZE 512
 #define BUF_LEN 1024
-/* global variables and structs */
-char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
 
 /*todo list
  * add buffer overflow handler
  * fix reallocing too much
  * space partitioning (needed?)
  * */
+
+/* global variables and structs */
+char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
 
 
 typedef struct node_s{
@@ -35,6 +36,7 @@ node_t *graph;
 unsigned long reallocCounter;
 unsigned long lineNumber;
 int debug;
+int debug2;
 
 
 /* function declarations */
@@ -44,18 +46,23 @@ void checkLineSanity();
 void parseLine(unsigned long lineNumber);
 void parseInput();
 int compareFunction(const void *a, const void *b);
-void partitionNew();
+void findNeighbors();
 void findShortestAugmentationsOld();
 void findShortestAugmentations();
 void findLongerAugmentations();
 int checkDone();
+void invertAugmentingPath(node_t *rootNodeReverseDFS);
+void printMatchedNodes();
+static inline unsigned short rootSet(node_t *);
 
 int main(){
-    debug = 1;
-	parseInput();
+    debug = 0;
+    debug2 = 1;
 
+
+	parseInput();
     qsort(graph,lineNumber, sizeof(node_t),&compareFunction);
-    partitionNew();
+    findNeighbors();
     findShortestAugmentationsOld();
     /*
     for(int i = 0; i < lineNumber; i++){
@@ -64,20 +71,46 @@ int main(){
         printf("\n");
     }
      */
-    if(checkDone())printf("found perfect matchings only using depth 1\n");
-    else printf("not done, need to check for deeper augmentations\n");
-    printf("Size in element count of provDataStruct = %ld\n", graphSize/sizeof(node_t));
-    printf("total parsed lines = %ld\n",lineNumber);
+    if(debug) {
+        if (checkDone())printf("found perfect matchings only using depth 1\n");
+        else printf("not done, need to check for deeper augmentations\n");
+        printf("Size in element count of provDataStruct = %ld\n", graphSize / sizeof(node_t));
+        printf("total parsed lines = %ld\n", lineNumber);
+    }
     findLongerAugmentations();
+
+    if(debug2)printMatchedNodes();
 
 	free(graph);
 	return 0;
 }
 
+void printMatchedNodes(){
+    for(int i = 0; i < lineNumber; i++){
+        if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
+            printf("%ld %ld;%ld %ld\n",graph[i].x,graph[i].y,graph[i].matchingPartner->x,graph[i].matchingPartner->y);
+        }
+    }
+}
+
+void invertAugmentingPath(node_t *rootNodeReverseDFS){
+    node_t *curr = rootNodeReverseDFS;
+    //node_t *tmp;
+    /*currently only printing augmenting path*/
+    do{
+        /**/
+        printf("%ld %ld\n",curr->x,curr->y);
+        if(curr->prev == (node_t *)0x01)curr = curr->matchingPartner;
+        else curr = curr->prev;
+
+    }while(curr->prev!=(node_t *)0x01 || curr->matchingPartner!=NULL);
+}
+
 int checkDone(){
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner==NULL) {
-            printf("%ld   %ld is not matched!\n",graph[i].x,graph[i].y);
+            if(debug)printf("%ld   %ld is not matched!\n",graph[i].x,graph[i].y);
+            else return 0;
             continue;
         }
     }
@@ -129,53 +162,58 @@ void findLongerAugmentations(){
     /*now alternately replacing matching partners to queue resp. adding the neighbours to the queue whilst removing the resp. node*/
 
     node_t *curr;
-    size_t queueindex = 0;
     size_t queuestart = 0;
     size_t oldsize = 0;
+    size_t oldstart = 0;
 
-    /*fixme indices are a total mess, therefore endless loop*/
     do {
-            while (queueindex < queuesize) { //replacing matching partners
-                curr = queue[queueindex];
-                if (curr->matchingPartner == NULL){printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);return;}//we can end after this iteration since we found a free node
+
+            for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
+                curr = queue[i];
+                if (curr->matchingPartner == NULL){
+                    if(debug)printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
+                    invertAugmentingPath(curr);
+                    return;
+                }//we can end after this iteration since we found a free node
                 else {
                     if(debug)printf("repacing: now %ld   %ld\n",curr->matchingPartner->x,curr->matchingPartner->y);
-                    queue[queueindex++] = curr->matchingPartner;
+                    queue[i] = curr->matchingPartner;
                     curr->matchingPartner->prev = (node_t *) 0x01;
                 }
             }
 
-        queueindex = queuestart;
+
         oldsize = queuesize;
-            while (queueindex < oldsize) {//adding neighbours
-                if(debug)printf("oldsize = %ld, queueindex = %ld\n",oldsize,queueindex);
-                curr = queue[queueindex++];
+        oldstart = queuestart;
+            for(size_t i = queuestart; i < oldstart+oldsize; i++) {//adding neighbours
+                if(debug)printf("oldsize = %ld, index = %ld\n",oldsize,i);
+                curr = queue[i];
                 queuesize--;
                 queuestart++;
                 if (curr->left != NULL) {
                     if(rootSet(curr->left) && curr->left->prev == NULL) {
-                        queue[queuesize++] = curr->left;
+                        queue[queuestart+queuesize++] = curr->left;
                         curr->left->prev = curr;
                         if (debug)printf("added %ld %ld . left to queue\n", curr->x, curr->y);
                     }
                 }
                 if (curr->right != NULL) {
                     if(rootSet(curr->right) && curr->right->prev == NULL) {
-                        queue[queuesize++] = curr->right;
+                        queue[queuestart+queuesize++] = curr->right;
                         curr->right->prev = curr;
                         if (debug)printf("added %ld %ld . right to queue\n", curr->x, curr->y);
                     }
                 }
                 if (curr->up != NULL) {
                     if(rootSet(curr->up) && curr->up->prev == NULL) {
-                        queue[queuesize++] = curr->up;
+                        queue[queuestart+queuesize++] = curr->up;
                         curr->up->prev = curr;
                         if (debug)printf("added %ld %ld . up to queue\n", curr->x, curr->y);
                     }
                 }
                 if (curr->down != NULL) {
                     if(rootSet(curr->down) && curr->down->prev == NULL) {
-                        queue[queuesize++] = curr->down;
+                        queue[queuestart+queuesize++] = curr->down;
                         curr->down->prev = curr;
                         if (debug)printf("added %ld %ld . down to queue\n", curr->x, curr->y);
                     }
@@ -230,7 +268,7 @@ void findShortestAugmentationsOld(){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
                 if(graph[i].left->matchingPartner == NULL){
-                    printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
+                    if(debug)printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
                     graph[i].left->matchingPartner = graph[i].left->right;
                     graph[i].matchingPartner = graph[i].left;
                     continue;
@@ -238,7 +276,7 @@ void findShortestAugmentationsOld(){
             }
             if(graph[i].down != NULL){
                 if(graph[i].down->matchingPartner == NULL){
-                    printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
+                    if(debug)printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
                     graph[i].down->matchingPartner = graph[i].down->up;
                     graph[i].matchingPartner = graph[i].down;
                     continue;
@@ -250,7 +288,7 @@ void findShortestAugmentationsOld(){
 
 
 
-void partitionNew(){
+void findNeighbors(){
     /*find y-neighbours*/
     for(int i = 0; i < lineNumber; i++){
         unsigned long x = graph[i].x;
@@ -335,7 +373,7 @@ void parseInput(){
         checkLineSanity();
         parseLine(lineNumber++);
     }
-    //printf("%ld reallocs executed\n",reallocCounter);
+    if(debug)printf("%ld reallocs executed\n",reallocCounter);
 }
 
 /**
