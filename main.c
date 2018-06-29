@@ -17,7 +17,9 @@
 /*todo list
  * add buffer overflow handler
  * fix reallocing too much
- * space partitioning (needed?)
+ * improve the queue used in findLongerAugmentations()
+ * can reset() be done more efficiently?
+ * space partitioning needed? -> no
  * */
 
 /* global variables and structs */
@@ -28,7 +30,6 @@ typedef struct node_s{
     unsigned long x;
     unsigned long y;
     struct node_s *up,*down,*left,*right,*matchingPartner, *prev;
-    short mark;
 }node_t;
 
 size_t graphSize;
@@ -49,15 +50,17 @@ int compareFunction(const void *a, const void *b);
 void findNeighbors();
 void findShortestAugmentationsOld();
 void findShortestAugmentations();
-void findLongerAugmentations();
+int findLongerAugmentations();
 int checkDone();
 void invertAugmentingPath(node_t *rootNodeReverseDFS);
 void printMatchedNodes();
 static inline unsigned short rootSet(node_t *);
+void reset();
+
 
 int main(){
     debug = 0;
-    debug2 = 1;
+    debug2 = 0;
 
 
 	parseInput();
@@ -72,14 +75,15 @@ int main(){
     }
      */
     if(debug) {
-        if (checkDone())printf("found perfect matchings only using depth 1\n");
-        else printf("not done, need to check for deeper augmentations\n");
         printf("Size in element count of provDataStruct = %ld\n", graphSize / sizeof(node_t));
         printf("total parsed lines = %ld\n", lineNumber);
     }
-    findLongerAugmentations();
+    int ret;
+    while((ret = findLongerAugmentations()) != 0 && ret != -1)reset();
 
-    if(debug2)printMatchedNodes();
+    if(checkDone())printMatchedNodes();
+    else printf("None\n");
+
 
 	free(graph);
 	return 0;
@@ -95,15 +99,20 @@ void printMatchedNodes(){
 
 void invertAugmentingPath(node_t *rootNodeReverseDFS){
     node_t *curr = rootNodeReverseDFS;
-    //node_t *tmp;
-    /*currently only printing augmenting path*/
+    node_t *before,*tmp;
+    /*inverts the augmenting path starting at rootNodeReverseDFS*/
     do{
         /**/
-        printf("%ld %ld\n",curr->x,curr->y);
-        if(curr->prev == (node_t *)0x01)curr = curr->matchingPartner;
-        else curr = curr->prev;
+        curr->matchingPartner = curr->prev;
+        before = curr;
+        curr = curr->prev;
 
-    }while(curr->prev!=(node_t *)0x01 || curr->matchingPartner!=NULL);
+
+        tmp = curr->matchingPartner;
+        curr->matchingPartner = before;
+        curr = tmp;
+
+    }while(curr != NULL);
 }
 
 int checkDone(){
@@ -117,55 +126,57 @@ int checkDone(){
     return 1;
 }
 
+void reset(){
+    for(int i = 0; i < lineNumber; i++){
+        graph[i].prev = NULL;
+    }
+}
+
 static inline unsigned short rootSet(node_t *node){
     return ((node->x%2)+(node->y%2))%2;
 }
-
-void findLongerAugmentations(){
+/**
+ * finds and inverts augmentating paths,
+ * @return 0 when no path can be found since there are no free nodes where the path could end
+ * @return 1 when at least one path was found and inverted
+ * @return -1 when no path can be found but there are free nodes, meaning the problem is not solvable
+ * */
+int findLongerAugmentations(){
     /*BFS starting w/ free nodes that are also part of the rootSet*/
     //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
     node_t **queue = malloc(sizeof(node_t *) * lineNumber);
     size_t queuesize = 0;
-    if(debug)printf("starting BFS...\n");
+    short done = 1; //boolean, if we added any new nodes (if not, no more augmenting paths can be found)
     /*initializing the queue w/free nodes */
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL && !rootSet(graph+i)){
+            done = 0;
             if(graph[i].left != NULL) {
                 queue[queuesize++] = graph[i].left;
                 graph[i].left->prev = &graph[i];
-                if(debug)printf("added %ld %ld . left to queue\n",graph[i].x,graph[i].y);
             }
             if(graph[i].right != NULL) {
                 queue[queuesize++] = graph[i].right;
                 graph[i].right->prev = &graph[i];
-                if(debug)printf("added %ld %ld . right to queue\n",graph[i].x,graph[i].y);
             }
             if(graph[i].up != NULL) {
                 queue[queuesize++] = graph[i].up;
                 graph[i].up->prev = &graph[i];
-                if(debug)printf("added %ld %ld . up to queue\n",graph[i].x,graph[i].y);
             }
             if(graph[i].down != NULL) {
                 queue[queuesize++] = graph[i].down;
                 graph[i].down->prev = &graph[i];
-                if(debug)printf("added %ld %ld . down to queue\n",graph[i].x,graph[i].y);
             }
             graph[i].prev = (node_t *)0x01; //Flag, that this node cannot be part of any other augmenting paths
         }
     }
-    if(debug){
-        printf("BFS is starting with the following free nodes: \n");
-        for(int i = 0; i < queuesize; i++){
-            printf(" %ld   %ld\n",queue[i]->prev->x,queue[i]->prev->y);
-        }
-    }
+    if(done)return 0;
     /*now alternately replacing matching partners to queue resp. adding the neighbours to the queue whilst removing the resp. node*/
-
     node_t *curr;
     size_t queuestart = 0;
     size_t oldsize = 0;
     size_t oldstart = 0;
-
+    short added;
     do {
 
             for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
@@ -173,10 +184,9 @@ void findLongerAugmentations(){
                 if (curr->matchingPartner == NULL){
                     if(debug)printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
                     invertAugmentingPath(curr);
-                    return;
+                    return 1;
                 }//we can end after this iteration since we found a free node
                 else {
-                    if(debug)printf("repacing: now %ld   %ld\n",curr->matchingPartner->x,curr->matchingPartner->y);
                     queue[i] = curr->matchingPartner;
                     curr->matchingPartner->prev = (node_t *) 0x01;
                 }
@@ -185,8 +195,8 @@ void findLongerAugmentations(){
 
         oldsize = queuesize;
         oldstart = queuestart;
+        added = 0;
             for(size_t i = queuestart; i < oldstart+oldsize; i++) {//adding neighbours
-                if(debug)printf("oldsize = %ld, index = %ld\n",oldsize,i);
                 curr = queue[i];
                 queuesize--;
                 queuestart++;
@@ -194,31 +204,32 @@ void findLongerAugmentations(){
                     if(rootSet(curr->left) && curr->left->prev == NULL) {
                         queue[queuestart+queuesize++] = curr->left;
                         curr->left->prev = curr;
-                        if (debug)printf("added %ld %ld . left to queue\n", curr->x, curr->y);
+                        added = 1;
                     }
                 }
                 if (curr->right != NULL) {
                     if(rootSet(curr->right) && curr->right->prev == NULL) {
                         queue[queuestart+queuesize++] = curr->right;
                         curr->right->prev = curr;
-                        if (debug)printf("added %ld %ld . right to queue\n", curr->x, curr->y);
+                        added = 1;
                     }
                 }
                 if (curr->up != NULL) {
                     if(rootSet(curr->up) && curr->up->prev == NULL) {
                         queue[queuestart+queuesize++] = curr->up;
                         curr->up->prev = curr;
-                        if (debug)printf("added %ld %ld . up to queue\n", curr->x, curr->y);
+                        added = 1;
                     }
                 }
                 if (curr->down != NULL) {
                     if(rootSet(curr->down) && curr->down->prev == NULL) {
                         queue[queuestart+queuesize++] = curr->down;
                         curr->down->prev = curr;
-                        if (debug)printf("added %ld %ld . down to queue\n", curr->x, curr->y);
+                        added = 1;
                     }
                 }
             }
+        if(!added)return -1;
     }
     while(1);
 
@@ -384,8 +395,7 @@ int getNextLine(){
     buf[BUF_LEN-1] = 'x';
     if(fgets(buf,sizeof(buf),stdin) == NULL)return ERROR_CODE;
     if(buf[BUF_LEN-1] != 'x'){
-        //TODO:handle this!
-        printf("fgets didnt get all chars in one line!\n");
+        //our buffer doesn't contain the entire line
         exit(-1);
     }
     return SUCCESS_CODE;
