@@ -396,7 +396,46 @@ int getNextLine(){
     if(fgets(buf,sizeof(buf),stdin) == NULL)return ERROR_CODE;
     if(buf[BUF_LEN-1] != 'x'){
         //our buffer doesn't contain the entire line
-        exit(-1);
+        char *tmp = malloc(BUF_LEN*sizeof(char));
+        memset(tmp,0,BUF_LEN*sizeof(char));
+        int state = 0,i = 1,index_tmp = 0;
+        char c = buf[0];
+        while(c != '\n'){
+            if(state == 0){
+                if(c != '0'){
+                    tmp[0] = '0';
+                    tmp[1] = c;
+                    index_tmp = 2;
+                    state = 1;
+                }
+            }
+            else if(state == 1){
+                if(c != ' '){
+                    tmp[index_tmp++] = c;
+                }
+                else state = 2;
+            }
+            else if(state == 2){
+                if(c != '0'){
+                    tmp[index_tmp++] = '0';
+                    tmp[index_tmp++] = c;
+                    state = 3;
+                }
+            }
+            else if(state == 3){
+                if(index_tmp < 100){
+                    tmp[index_tmp++] = c;
+                }
+                else break;
+            }
+
+            if(i >= BUF_LEN)c = fgetc(stdin);
+            else{
+                c = buf[i++];
+            }
+        }
+        tmp[index_tmp] = '\n';
+        memcpy(buf,tmp,BUF_LEN*sizeof(char));
     }
     return SUCCESS_CODE;
 }
