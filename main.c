@@ -401,6 +401,8 @@ int getNextLine(){
         int state = 0,i = 1,index_tmp = 0;
         char c = buf[0];
         while(c != '\n'){
+            printf("state = %d\n",state);
+            printf("index_tmp = %d\n",index_tmp);
             if(state == 0){
                 if(c != '0'){
                     tmp[0] = '0';
@@ -416,17 +418,18 @@ int getNextLine(){
                 else state = 2;
             }
             else if(state == 2){
-                if(c != '0'){
-                    tmp[index_tmp++] = '0';
+                if(c != ' '){
+                    tmp[index_tmp++] = ' ';
                     tmp[index_tmp++] = c;
                     state = 3;
                 }
             }
             else if(state == 3){
-                if(index_tmp < 100){
+                if(c != '0'){
+                    printf("c = %c\n",c);
+                    tmp[index_tmp-1] = 'x';
                     tmp[index_tmp++] = c;
                 }
-                else break;
             }
 
             if(i >= BUF_LEN)c = fgetc(stdin);
@@ -435,6 +438,7 @@ int getNextLine(){
             }
         }
         tmp[index_tmp] = '\n';
+        printf("%s",tmp);
         memcpy(buf,tmp,BUF_LEN*sizeof(char));
     }
     return SUCCESS_CODE;
