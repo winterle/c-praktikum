@@ -15,7 +15,7 @@
 #define BUF_LEN 1024
 
 /*todo list
- * add buffer overflow handler
+ * add buffer overflow handlerg
  * fix reallocing too much
  * improve the queue used in findLongerAugmentations()
  * can reset() be done more efficiently?
@@ -144,6 +144,7 @@ static inline unsigned short rootSet(node_t *node){
 int findLongerAugmentations(){
     /*BFS starting w/ free nodes that are also part of the rootSet*/
     //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
+    //FIXME free queue
     node_t **queue = malloc(sizeof(node_t *) * lineNumber);
     size_t queuesize = 0;
     short done = 1; //boolean, if we added any new nodes (if not, no more augmenting paths can be found)
