@@ -25,7 +25,7 @@
  * */
 
 /* global variables and structs */
-char buf[BUF_LEN]; //assuming one line never exceeds 1024 characters
+char buf[BUF_LEN];
 
 
 typedef struct node_s{
@@ -36,10 +36,7 @@ typedef struct node_s{
 
 size_t graphSize;
 node_t *graph;
-unsigned long reallocCounter;
 unsigned long lineNumber;
-int debug;
-int total_paths = 0;
 
 
 /* function declarations */
@@ -51,18 +48,16 @@ void parseInput();
 int compareFunctionX(const void *a, const void *b);
 int compareFunctionY(const void *a, const void *b);
 void findNeighbors();
-void findShortestAugmentationsOld();
 void findShortestAugmentations();
 int findLongerAugmentations();
 int checkDone();
-void invertAugmentingPath(node_t *rootNodeReverseDFS);
+void invertPath(node_t *rootNodeReverseDFS);
 void printMatchedNodes();
 static inline unsigned short rootSet(node_t *);
 void reset();
 
 
 int main(){
-    debug = 0;
 
 	parseInput();
 
@@ -70,7 +65,7 @@ int main(){
 
     findNeighbors();//implicitly calls compareFunctionX
 
-    findShortestAugmentationsOld();
+    findShortestAugmentations();
 
     while(findLongerAugmentations()>0)reset();
 
@@ -97,23 +92,7 @@ void printMatchedNodes(){
 
 
 /**inverts the augmenting path starting at @param rootNodeReverseDFS*/
-void invertAugmentingPath(node_t *rootNodeReverseDFS){
-    node_t *curr = rootNodeReverseDFS;
-    node_t *before,*tmp;
-
-    do{
-        curr->matchingPartner = curr->prev;
-        before = curr;
-        curr = curr->prev;
-
-        tmp = curr->matchingPartner;
-        curr->matchingPartner = before;
-        curr = tmp;
-
-    }while(curr != NULL);
-}
-
-void newInvert(node_t *rootNodeReverseDFS){
+void invertPath(node_t *rootNodeReverseDFS){
     node_t *curr = rootNodeReverseDFS;
     node_t *before,*tmp;
 
@@ -177,11 +156,9 @@ int findLongerAugmentations(){
 #ifdef DEBUG
     printf("enter\n");
 #endif
-    total_paths++;
     /*BFS starting w/ free nodes that are also part of the rootSet*/
     //continue searching for paths of same lenght, find way to augment them all (can do instantly?)
     //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
-    //FIXME free queue
     node_t **queue = malloc(sizeof(node_t *) * lineNumber);
     size_t queuesize = 0;
     short done = 1; //boolean, if we added any new nodes (if not, no more augmenting paths can be found)
@@ -228,10 +205,9 @@ int findLongerAugmentations(){
                     #ifdef DEBUG
                     printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
                     printf("length = %ld ",path_len);
-                    printf("total paths = %d\n",total_paths);
                     #endif
                     if(pathValid(curr)) {
-                        newInvert(curr);
+                        invertPath(curr);
                     }
                     else {
 
@@ -296,47 +272,8 @@ int findLongerAugmentations(){
 
 }
 
+
 void findShortestAugmentations(){
-    for(int i = 0; i < lineNumber; i++){
-        if(graph[i].matchingPartner == NULL && !rootSet(&graph[i])){
-            if(graph[i].left != NULL){
-                if(graph[i].left->matchingPartner == NULL && rootSet(graph[i].left)){
-                    printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
-                    graph[i].left->matchingPartner = graph[i].left->right;
-                    graph[i].matchingPartner = graph[i].left;
-                    continue;
-                }
-            }
-            if(graph[i].down != NULL){
-                if(graph[i].down->matchingPartner == NULL && rootSet(graph[i].down)){
-                    printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
-                    graph[i].down->matchingPartner = graph[i].down->up;
-                    graph[i].matchingPartner = graph[i].down;
-                    continue;
-                }
-            }
-            if(graph[i].right != NULL){
-                if(graph[i].right->matchingPartner == NULL&& rootSet(graph[i].right)){
-                    printf("%ld %ld;%ld %ld\n",graph[i].right->x, graph[i].right->y,graph[i].x, graph[i].y);
-                    graph[i].right->matchingPartner = graph[i].right->left;
-                    graph[i].matchingPartner = graph[i].right;
-                    continue;
-                }
-            }
-            if(graph[i].up != NULL){
-                if(graph[i].up->matchingPartner == NULL&& rootSet(graph[i].up)){
-                    printf("%ld %ld;%ld %ld\n",graph[i].up->x, graph[i].up->y,graph[i].x, graph[i].y);
-                    graph[i].up->matchingPartner = graph[i].up->down;
-                    graph[i].matchingPartner = graph[i].up;
-                    continue;
-                }
-            }
-        }
-    }
-}
-
-
-void findShortestAugmentationsOld(){
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
@@ -528,10 +465,8 @@ void parseLine(unsigned long lineNumber) {
             die(ERROR_CODE);
         }
         graphSize = INIT_SIZE*sizeof(node_t);
-        reallocCounter = 0;
     }
     if(graphSize/sizeof(node_t)<=lineNumber){
-        reallocCounter++;
         graphSize*=2;
         graph = realloc(graph,graphSize);
         if(graph == NULL){
