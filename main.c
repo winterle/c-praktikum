@@ -15,10 +15,10 @@
 #define BUF_LEN 1024
 
 /*todo list
- * add buffer overflow handler
+ * add buffer overflow handler --> done, but weird
+ * improve neighbor finding --> way too inefficient, better resort the graph w/ quicksort
  * improve the queue used in findLongerAugmentations()
  * can reset() be done more efficiently?
- * space partitioning needed? -> no
  * */
 
 /* global variables and structs */
@@ -36,6 +36,7 @@ node_t *graph;
 unsigned long reallocCounter;
 unsigned long lineNumber;
 int debug;
+int total_paths = 0;
 
 
 /* function declarations */
@@ -57,12 +58,14 @@ void reset();
 
 
 int main(){
-    debug = 0;
+    debug = 1;
 
 
 	parseInput();
     qsort(graph,lineNumber, sizeof(node_t),&compareFunction);
+    if(debug)printf("qsort done\n");
     findNeighbors();
+    if(debug)printf("neighbors done\n");
     findShortestAugmentationsOld();
     /*
     for(int i = 0; i < lineNumber; i++){
@@ -139,6 +142,7 @@ static inline unsigned short rootSet(node_t *node){
  * @return -1 when no path can be found but there are free nodes, meaning the problem is not solvable
  * */
 int findLongerAugmentations(){
+    total_paths++;
     /*BFS starting w/ free nodes that are also part of the rootSet*/
     //continue searching for paths of same lenght, find way to augment them all (can do instantly?)
     //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
@@ -179,12 +183,16 @@ int findLongerAugmentations(){
     size_t oldsize = 0;
     size_t oldstart = 0;
     short added;
+    /*debug variable*/
+    unsigned long path_len = 3;
     do {
 
             for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
                 curr = queue[i];
                 if (curr->matchingPartner == NULL){
                     if(debug)printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
+                    if(debug)printf("length = %ld ",path_len);
+                    if(debug)printf("total paths = %d\n",total_paths);
                     invertAugmentingPath(curr);
                     free(queue);
                     return 1;
@@ -236,6 +244,7 @@ int findLongerAugmentations(){
             free(queue);
             return -1;
         }
+        path_len+=2;
     }
     while(1);
 
@@ -285,7 +294,7 @@ void findShortestAugmentationsOld(){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
                 if(graph[i].left->matchingPartner == NULL){
-                    if(debug)printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
+                    //if(debug)printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
                     graph[i].left->matchingPartner = graph[i].left->right;
                     graph[i].matchingPartner = graph[i].left;
                     continue;
@@ -293,7 +302,7 @@ void findShortestAugmentationsOld(){
             }
             if(graph[i].down != NULL){
                 if(graph[i].down->matchingPartner == NULL){
-                    if(debug)printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
+                    //if(debug)printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
                     graph[i].down->matchingPartner = graph[i].down->up;
                     graph[i].matchingPartner = graph[i].down;
                     continue;
@@ -407,8 +416,6 @@ int getNextLine(){
         int state = 0,i = 1,index_tmp = 0;
         char c = buf[0];
         while(c != '\n'){
-            printf("state = %d\n",state);
-            printf("index_tmp = %d\n",index_tmp);
             if(state == 0){
                 if(c != '0'){
                     tmp[0] = '0';
@@ -431,9 +438,7 @@ int getNextLine(){
                 }
             }
             else if(state == 3){
-                if(c != '0'){
-                    printf("c = %c\n",c);
-                    tmp[index_tmp-1] = 'x';
+                if(c != '0' && c!='\0'){
                     tmp[index_tmp++] = c;
                 }
             }
@@ -444,7 +449,6 @@ int getNextLine(){
             }
         }
         tmp[index_tmp] = '\n';
-        printf("%s",tmp);
         memcpy(buf,tmp,BUF_LEN*sizeof(char));
     }
     return SUCCESS_CODE;
