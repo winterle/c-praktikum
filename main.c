@@ -3,19 +3,25 @@
 #include <memory.h>
 #include <errno.h>
 
+//#define DEBUG
+/**
+ * @author Leander Winter
+ * */
+
 #define ERROR_CODE (-1)
 #define SUCCESS_CODE 0
 #define UNKNOWN_CHAR 2
 #define ULONG_OVERFLOW 3
 #define WRONG_NUMBER_COUNT 4
+#define DOUBLE_VALUE 5
 #define INIT_SIZE 512
 #define BUF_LEN 1024
 
 /*todo list
- * add buffer overflow handler --> done, but weird
- * improve neighbor finding --> way too inefficient, better resort the graph w/ quicksort
- * improve the queue used in findLongerAugmentations()
- * can reset() be done more efficiently?
+ * add buffer overflow handler --> done, but weird --> rewrite?
+ * further improve neighbor finding
+ * improve the queue used in findLongerAugmentations(); pathes of same length in one iteration
+ * can reset() be done more efficiently? --> alternate flag values?
  * */
 
 /* global variables and structs */
@@ -58,47 +64,49 @@ void reset();
 int main(){
     debug = 0;
 
-
 	parseInput();
+
     qsort(graph,lineNumber, sizeof(node_t), &compareFunctionY);
-    if(debug)printf("qsort done\n");
+
     findNeighbors();//implicitly calls compareFunctionX
-    if(debug)printf("neighbors done\n");
+
     findShortestAugmentationsOld();
 
-    if(debug) {
-        printf("Size in element count of provDataStruct = %ld\n", graphSize / sizeof(node_t));
-        printf("total parsed lines = %ld\n", lineNumber);
-    }
-    int ret;
-    while((ret = findLongerAugmentations()) != 0 && ret != -1)reset();
+    printMatchedNodes();
+
+    while(findLongerAugmentations()>0)reset();
 
     if(checkDone())printMatchedNodes();
     else printf("None\n");
 
-
 	free(graph);
 	return 0;
 }
+
 
 void printMatchedNodes(){
     for(int i = 0; i < lineNumber; i++){
         if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
             printf("%ld %ld;%ld %ld\n",graph[i].x,graph[i].y,graph[i].matchingPartner->x,graph[i].matchingPartner->y);
         }
+#ifdef DEBUG
+        if(graph[i].matchingPartner == NULL){
+            printf("%ld %ld is not matched\n",graph[i].x,graph[i].y);
+        }
+#endif
     }
 }
 
+
+/**inverts the augmenting path starting at @param rootNodeReverseDFS*/
 void invertAugmentingPath(node_t *rootNodeReverseDFS){
     node_t *curr = rootNodeReverseDFS;
     node_t *before,*tmp;
-    /*inverts the augmenting path starting at rootNodeReverseDFS*/
+
     do{
-        /**/
         curr->matchingPartner = curr->prev;
         before = curr;
         curr = curr->prev;
-
 
         tmp = curr->matchingPartner;
         curr->matchingPartner = before;
@@ -107,16 +115,47 @@ void invertAugmentingPath(node_t *rootNodeReverseDFS){
     }while(curr != NULL);
 }
 
+void newInvert(node_t *rootNodeReverseDFS){
+    node_t *curr = rootNodeReverseDFS;
+    node_t *before,*tmp;
+
+    do{
+        curr->matchingPartner = curr->prev;
+        before = curr;
+        curr = curr->prev;
+
+        before->prev = (node_t*)0x01;
+        curr->prev = (node_t*)0x01;
+
+        tmp = curr->matchingPartner;
+        curr->matchingPartner = before;
+        curr = tmp;
+
+
+    }while(curr != NULL);
+}
+
+int pathValid(node_t *rootNodeReverseDFS){
+    node_t *curr = rootNodeReverseDFS;
+    do{
+        if(curr->prev == (node_t*)0x01){return 0;}
+        curr = curr->prev;
+        if(curr->prev == (node_t*)0x01){return 0;}
+        curr = curr->matchingPartner;
+
+    }while(curr != NULL);
+    return 1;
+}
+
 int checkDone(){
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner==NULL) {
-            if(debug)printf("%ld   %ld is not matched!\n",graph[i].x,graph[i].y);
-            else return 0;
-            continue;
+            return 0;
         }
     }
     return 1;
 }
+
 
 void reset(){
     for(int i = 0; i < lineNumber; i++){
@@ -124,9 +163,12 @@ void reset(){
     }
 }
 
+
 static inline unsigned short rootSet(node_t *node){
     return ((node->x%2)+(node->y%2))%2;
 }
+
+
 /**
  * finds and inverts augmentating paths,
  * @return 0 when no path can be found since there are no free nodes where the path could end
@@ -134,6 +176,9 @@ static inline unsigned short rootSet(node_t *node){
  * @return -1 when no path can be found but there are free nodes, meaning the problem is not solvable
  * */
 int findLongerAugmentations(){
+#ifdef DEBUG
+    printf("enter\n");
+#endif
     total_paths++;
     /*BFS starting w/ free nodes that are also part of the rootSet*/
     //continue searching for paths of same lenght, find way to augment them all (can do instantly?)
@@ -162,7 +207,7 @@ int findLongerAugmentations(){
                 queue[queuesize++] = graph[i].down;
                 graph[i].down->prev = &graph[i];
             }
-            graph[i].prev = (node_t *)0x01; //Flag, that this node cannot be part of any other augmenting paths
+            //graph[i].prev = (node_t *)0x01; //Flag, that this node cannot be part of any other augmenting paths fixme here
         }
     }
     if(done){
@@ -174,26 +219,37 @@ int findLongerAugmentations(){
     size_t queuestart = 0;
     size_t oldsize = 0;
     size_t oldstart = 0;
-    short added;
+    short added,path_done;
     /*debug variable*/
     unsigned long path_len = 3;
     do {
-
+            path_done = 0;
             for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
                 curr = queue[i];
                 if (curr->matchingPartner == NULL){
-                    if(debug)printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
-                    if(debug)printf("length = %ld ",path_len);
-                    if(debug)printf("total paths = %d\n",total_paths);
-                    invertAugmentingPath(curr);
-                    free(queue);
-                    return 1;
+                    #ifdef DEBUG
+                    printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
+                    printf("length = %ld ",path_len);
+                    printf("total paths = %d\n",total_paths);
+                    #endif
+                    if(pathValid(curr)) {
+                        newInvert(curr);
+                    }
+                    else {
+
+                        #ifdef DEBUG
+                        printf("not valid\n");
+                        #endif
+                        continue;
+                    }
+                    path_done = 1;
                 }//we can end after this iteration since we found a free node
                 else {
                     queue[i] = curr->matchingPartner;
-                    curr->matchingPartner->prev = (node_t *) 0x01;
+                    //curr->matchingPartner->prev = (node_t *) 0x01;fixme here
                 }
             }
+        if(path_done)return 1;
 
 
         oldsize = queuesize;
@@ -281,12 +337,12 @@ void findShortestAugmentations(){
     }
 }
 
+
 void findShortestAugmentationsOld(){
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
                 if(graph[i].left->matchingPartner == NULL){
-                    //if(debug)printf("%ld %ld;%ld %ld\n",graph[i].left->x, graph[i].left->y,graph[i].x, graph[i].y);
                     graph[i].left->matchingPartner = graph[i].left->right;
                     graph[i].matchingPartner = graph[i].left;
                     continue;
@@ -294,7 +350,6 @@ void findShortestAugmentationsOld(){
             }
             if(graph[i].down != NULL){
                 if(graph[i].down->matchingPartner == NULL){
-                    //if(debug)printf("%ld %ld;%ld %ld\n",graph[i].down->x, graph[i].down->y,graph[i].x, graph[i].y);
                     graph[i].down->matchingPartner = graph[i].down->up;
                     graph[i].matchingPartner = graph[i].down;
                     continue;
@@ -305,13 +360,12 @@ void findShortestAugmentationsOld(){
 }
 
 
-
 void findNeighbors(){
-    /*find y-neighbours*/
+
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].right == NULL && i != lineNumber-1){
             if(graph[i+1].y == graph[i].y && graph[i+1].x == graph[i].x+1){
-                graph[i].right = (node_t *)0x01; //marker, that there is a neighbor (cannot take absolute pointer value, since we will resort
+                graph[i].right = (node_t *)0x01; //marker, that there is a neighbor (cannot take absolute pointer value, since we will resort)
             }
         }
     }
@@ -325,7 +379,8 @@ void findNeighbors(){
                 graph[i].up = &graph[i+1];
             }
         }
-        //Fixme: this is inefficient and out of bound checking is not correct
+
+        //Fixme: this is inefficient AND out of bound checking is not correct
 
         if(graph[i].right == (node_t*)0x01){
             node_t *xmore = &graph[i];
@@ -339,10 +394,7 @@ void findNeighbors(){
                 xmore++;
             }
         }
-
-
     }
-
 }
 
 
@@ -357,9 +409,9 @@ int compareFunctionX(const void *a, const void *b){
         if(*ay>*by)return 1;
         if(*ay<*by)return -1;
         else {
-            printf("double value detected!\n");
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
-            exit(-1);
+            die(DOUBLE_VALUE);
+            return 0;
         }
     }
 }
@@ -390,7 +442,6 @@ void parseInput(){
         checkLineSanity();
         parseLine(lineNumber++);
     }
-    if(debug)printf("%ld reallocs executed\n",reallocCounter);
 }
 
 /**
@@ -431,8 +482,13 @@ int getNextLine(){
             else if(state == 3){
                 if(c != '0' && c!='\0'){
                     tmp[index_tmp++] = c;
+                    state = 4;
                 }
             }
+            else if(state > 3 && state < 20){
+                tmp[index_tmp++] = c;
+            }
+            else break;
 
             if(i >= BUF_LEN)c = fgetc(stdin);
             else{
@@ -444,6 +500,7 @@ int getNextLine(){
     }
     return SUCCESS_CODE;
 }
+
 
 void checkLineSanity(){
     int pos = 0;
@@ -464,27 +521,24 @@ void checkLineSanity(){
     if(numCount!=2)die(WRONG_NUMBER_COUNT);
 }
 
+
 void parseLine(unsigned long lineNumber) {
     if (lineNumber == 0){
         graph = malloc(INIT_SIZE*sizeof(node_t));
+        if(graph == NULL){
+            fprintf(stderr,"malloc() failed\n");
+            die(ERROR_CODE);
+        }
         graphSize = INIT_SIZE*sizeof(node_t);
-        /*
-        printf("size of node_t is %ld\n",sizeof(node_t));
-        printf("graphSize is now %ld bytes = %ld nodes\n",graphSize,graphSize/sizeof(node_t));
-         */
         reallocCounter = 0;
     }
     if(graphSize/sizeof(node_t)<=lineNumber){
         reallocCounter++;
         graphSize*=2;
         graph = realloc(graph,graphSize);
-        /*
-        printf("graphSize is now %ld bytes = %ld nodes\n",graphSize,graphSize/sizeof(node_t));
-        printf("whilst lineno = %ld\n",lineNumber);
-        */
         if(graph == NULL){
             fprintf(stderr,"realloc() failed\n");
-            die(-1);
+            die(ERROR_CODE);
         }
     }
     char *endptr = NULL;
@@ -506,18 +560,16 @@ void parseLine(unsigned long lineNumber) {
     memset((unsigned long*)&graph[lineNumber]+2,0,sizeof(node_t *)*6);
 }
 
+
 void die(int error_num){
-    if(error_num==UNKNOWN_CHAR) {
-        fprintf(stderr, "Unknown character, exiting...\n");
-    }
-    else if(error_num==ULONG_OVERFLOW){
-        fprintf(stderr,"Number too big!\n");
-    }
-    else if(error_num==WRONG_NUMBER_COUNT){
-        fprintf(stderr,"Too many or not enough Numbers in one Line, exiting...\n");
-    }
-    else{
-        fprintf(stderr, "An unknown error occured, exiting...\n");
+    free(graph);
+    switch(error_num){
+        case UNKNOWN_CHAR:fprintf(stderr, "Unknown character, exiting...\n");break;
+        case ULONG_OVERFLOW:fprintf(stderr,"Number too big!\n");break;
+        case WRONG_NUMBER_COUNT:fprintf(stderr,"Too many or not enough Numbers in one Line, exiting...\n");break;
+        case DOUBLE_VALUE:fprintf(stderr,"Double value, exiting\n");break;
+        case ERROR_CODE:exit(ERROR_CODE);
+        default:fprintf(stderr, "An unknown error occured, exiting...\n");break;
     }
     exit(ERROR_CODE);
 }
