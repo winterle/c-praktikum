@@ -15,8 +15,7 @@
 #define BUF_LEN 1024
 
 /*todo list
- * add buffer overflow handlerg
- * fix reallocing too much
+ * add buffer overflow handler
  * improve the queue used in findLongerAugmentations()
  * can reset() be done more efficiently?
  * space partitioning needed? -> no
@@ -37,7 +36,6 @@ node_t *graph;
 unsigned long reallocCounter;
 unsigned long lineNumber;
 int debug;
-int debug2;
 
 
 /* function declarations */
@@ -60,7 +58,6 @@ void reset();
 
 int main(){
     debug = 0;
-    debug2 = 0;
 
 
 	parseInput();
@@ -81,7 +78,7 @@ int main(){
     int ret;
     while((ret = findLongerAugmentations()) != 0 && ret != -1)reset();
 
-    if(checkDone())printMatchedNodes();
+    if(checkDone());//printMatchedNodes(); FIXME here
     else printf("None\n");
 
 
@@ -143,6 +140,7 @@ static inline unsigned short rootSet(node_t *node){
  * */
 int findLongerAugmentations(){
     /*BFS starting w/ free nodes that are also part of the rootSet*/
+    //continue searching for paths of same lenght, find way to augment them all (can do instantly?)
     //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
     //FIXME free queue
     node_t **queue = malloc(sizeof(node_t *) * lineNumber);
@@ -171,7 +169,10 @@ int findLongerAugmentations(){
             graph[i].prev = (node_t *)0x01; //Flag, that this node cannot be part of any other augmenting paths
         }
     }
-    if(done)return 0;
+    if(done){
+        free(queue);
+        return 0;
+    }
     /*now alternately replacing matching partners to queue resp. adding the neighbours to the queue whilst removing the resp. node*/
     node_t *curr;
     size_t queuestart = 0;
@@ -185,6 +186,7 @@ int findLongerAugmentations(){
                 if (curr->matchingPartner == NULL){
                     if(debug)printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
                     invertAugmentingPath(curr);
+                    free(queue);
                     return 1;
                 }//we can end after this iteration since we found a free node
                 else {
@@ -230,7 +232,10 @@ int findLongerAugmentations(){
                     }
                 }
             }
-        if(!added)return -1;
+        if(!added){
+            free(queue);
+            return -1;
+        }
     }
     while(1);
 
@@ -468,26 +473,35 @@ void parseLine(unsigned long lineNumber) {
     if (lineNumber == 0){
         graph = malloc(INIT_SIZE*sizeof(node_t));
         graphSize = INIT_SIZE*sizeof(node_t);
+        /*
+        printf("size of node_t is %ld\n",sizeof(node_t));
+        printf("graphSize is now %ld bytes = %ld nodes\n",graphSize,graphSize/sizeof(node_t));
+         */
         reallocCounter = 0;
     }
-    if(graphSize/sizeof(node_t)<=lineNumber*2){
+    if(graphSize/sizeof(node_t)<=lineNumber){
         reallocCounter++;
         graphSize*=2;
         graph = realloc(graph,graphSize);
-        if(graph == NULL){printf("realloc failed\n");die(-1);}
+        /*
+        printf("graphSize is now %ld bytes = %ld nodes\n",graphSize,graphSize/sizeof(node_t));
+        printf("whilst lineno = %ld\n",lineNumber);
+        */
+        if(graph == NULL){
+            fprintf(stderr,"realloc() failed\n");
+            die(-1);
+        }
     }
     char *endptr = NULL;
     errno = 0;
     graph[lineNumber].x = strtoul(buf, &endptr, 10);
 
-    //printf("%ld   ", graph[lineNumber].x);
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
     }
     if (errno != 0 || endptr==NULL)die(ERROR_CODE);
-    graph[lineNumber].y = strtoul(endptr,&endptr,10);
 
-    //printf("%ld   \n", graph[lineNumber].y);
+    graph[lineNumber].y = strtoul(endptr,&endptr,10);
 
     if (errno == ERANGE) {
         die(ULONG_OVERFLOW);
