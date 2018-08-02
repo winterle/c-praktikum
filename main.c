@@ -58,7 +58,7 @@ void reset();
 
 
 int main(){
-    debug = 1;
+    debug = 0;
 
 
 	parseInput();
@@ -81,7 +81,7 @@ int main(){
     int ret;
     while((ret = findLongerAugmentations()) != 0 && ret != -1)reset();
 
-    if(checkDone());//printMatchedNodes(); FIXME here
+    if(checkDone())printMatchedNodes();
     else printf("None\n");
 
 
@@ -318,8 +318,9 @@ void findNeighbors(){
     /*find y-neighbours*/
     for(int i = 0; i < lineNumber; i++){
         unsigned long x = graph[i].x;
+        /*
         if(graph[i].down == NULL){
-            /*the x-value has to remain the same*/
+            //the x-value has to remain the same
             for(int j = i+1; graph[j].x == x; j++){
                 if(graph[j].y == graph[i].y-1){
                     //they are neighbors
@@ -328,19 +329,22 @@ void findNeighbors(){
                 }
             }
         }
+    */
         if(graph[i].up == NULL){
             for(int j = i+1; graph[j].x == x; j++){
                 if(graph[j].y == graph[i].y+1){
                     //neighbors
                     graph[j].down = &graph[i];
                     graph[i].up = &graph[j];
+                    break;
                 }
             }
         }
         //fixme: are those checkings for out of bounds correct? pointer arithmetic...
+
         if(graph[i].left == NULL){
-            /*now it's getting abit complicated, since we have to check the intervals of x-1 and x+1 for same y-values, so we first try to find
-             * the starting index of these intervals and then check, this is also a point where some optimisation (preprocessing?) could come in handy*/
+            //now it's getting abit complicated, since we have to check the intervals of x-1 and x+1 for same y-values, so we first try to find
+            // * the starting index of these intervals and then check, this is also a point where some optimisation (preprocessing?) could come in handy
             node_t *xless = &graph[i];
             while(xless->x == x && (xless - graph))xless-=1;
             if(xless->x == x);//do nothing, since there is no interval w/ x-1 values
@@ -349,11 +353,12 @@ void findNeighbors(){
                     if(xless->y == graph[i].y){//found neighbours
                         xless->right = &graph[i];
                         graph[i].left = xless;
+                        break;
                     }
                     xless-=1;
                 }
             }
-            /*now reusing xless value, therefore naming inconsistent*/
+            //now reusing xless value, therefore naming inconsistent
             xless = &graph[i];
             while(xless->x == x && (xless-graph)<= lineNumber)xless+=1;
             if(xless->x == x);//do nothing, since there is no interval w/ x+1 values
@@ -362,10 +367,12 @@ void findNeighbors(){
                     if(xless->y == graph[i].y){//found neighbours
                         xless->left = &graph[i];
                         graph[i].right = xless;
+                        break;
                     }
                     xless+=1;
                 }
             }
+
 
         }
 
