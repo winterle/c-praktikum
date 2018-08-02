@@ -72,8 +72,6 @@ int main(){
 
     findShortestAugmentationsOld();
 
-    printMatchedNodes();
-
     while(findLongerAugmentations()>0)reset();
 
     if(checkDone())printMatchedNodes();
