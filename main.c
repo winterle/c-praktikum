@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <memory.h>
-#include <time.h>
-#include <sys/types.h>
 #include <errno.h>
 
 #define ERROR_CODE (-1)
@@ -45,7 +42,8 @@ int getNextLine();
 void checkLineSanity();
 void parseLine(unsigned long lineNumber);
 void parseInput();
-int compareFunction(const void *a, const void *b);
+int compareFunctionX(const void *a, const void *b);
+int compareFunctionY(const void *a, const void *b);
 void findNeighbors();
 void findShortestAugmentationsOld();
 void findShortestAugmentations();
@@ -62,18 +60,12 @@ int main(){
 
 
 	parseInput();
-    qsort(graph,lineNumber, sizeof(node_t),&compareFunction);
+    qsort(graph,lineNumber, sizeof(node_t), &compareFunctionY);
     if(debug)printf("qsort done\n");
-    findNeighbors();
+    findNeighbors();//implicitly calls compareFunctionX
     if(debug)printf("neighbors done\n");
     findShortestAugmentationsOld();
-    /*
-    for(int i = 0; i < lineNumber; i++){
-        printf("%ld    %ld",graph[i].x,graph[i].y);
-        //if(graph[i].match)printf("  match =  %ld  %ld",((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->x,((node_t *)(graph+i+2*sizeof(unsigned long)+(graph[i].match -1)))->y);
-        printf("\n");
-    }
-     */
+
     if(debug) {
         printf("Size in element count of provDataStruct = %ld\n", graphSize / sizeof(node_t));
         printf("total parsed lines = %ld\n", lineNumber);
@@ -317,71 +309,44 @@ void findShortestAugmentationsOld(){
 void findNeighbors(){
     /*find y-neighbours*/
     for(int i = 0; i < lineNumber; i++){
-        unsigned long x = graph[i].x;
-        /*
-        if(graph[i].down == NULL){
-            //the x-value has to remain the same
-            for(int j = i+1; graph[j].x == x; j++){
-                if(graph[j].y == graph[i].y-1){
-                    //they are neighbors
-                    graph[j].up = &graph[i];
-                    graph[i].down = &graph[j];
-                }
+        if(graph[i].right == NULL && i != lineNumber-1){
+            if(graph[i+1].y == graph[i].y && graph[i+1].x == graph[i].x+1){
+                graph[i].right = (node_t *)0x01; //marker, that there is a neighbor (cannot take absolute pointer value, since we will resort
             }
         }
-    */
-        if(graph[i].up == NULL){
-            for(int j = i+1; graph[j].x == x; j++){
-                if(graph[j].y == graph[i].y+1){
-                    //neighbors
-                    graph[j].down = &graph[i];
-                    graph[i].up = &graph[j];
+    }
+    qsort(graph,lineNumber, sizeof(node_t), &compareFunctionX);
+    for(int i = 0; i < lineNumber; i++){
+        unsigned long x = graph[i].x;
+
+        if(graph[i].up == NULL && i != lineNumber-1){
+            if(graph[i+1].x == graph[i].x && graph[i+1].y == graph[i].y+1){
+                graph[i+1].down = &graph[i];
+                graph[i].up = &graph[i+1];
+            }
+        }
+        //Fixme: this is inefficient and out of bound checking is not correct
+
+        if(graph[i].right == (node_t*)0x01){
+            node_t *xmore = &graph[i];
+            while(xmore->x == x && (xmore-graph)<=lineNumber)xmore++;
+            while(xmore->x == x+1 && (xmore-graph)<=lineNumber){
+                if(xmore->y == graph[i].y){
+                    xmore->left = &graph[i];
+                    graph[i].right = xmore;
                     break;
                 }
+                xmore++;
             }
         }
-        //fixme: are those checkings for out of bounds correct? pointer arithmetic...
 
-        if(graph[i].left == NULL){
-            //now it's getting abit complicated, since we have to check the intervals of x-1 and x+1 for same y-values, so we first try to find
-            // * the starting index of these intervals and then check, this is also a point where some optimisation (preprocessing?) could come in handy
-            node_t *xless = &graph[i];
-            while(xless->x == x && (xless - graph))xless-=1;
-            if(xless->x == x);//do nothing, since there is no interval w/ x-1 values
-            else{
-                while(xless->x == x-1 && (xless- graph)){
-                    if(xless->y == graph[i].y){//found neighbours
-                        xless->right = &graph[i];
-                        graph[i].left = xless;
-                        break;
-                    }
-                    xless-=1;
-                }
-            }
-            //now reusing xless value, therefore naming inconsistent
-            xless = &graph[i];
-            while(xless->x == x && (xless-graph)<= lineNumber)xless+=1;
-            if(xless->x == x);//do nothing, since there is no interval w/ x+1 values
-            else{
-                while(xless->x == x+1 && (xless-graph)<= lineNumber){
-                    if(xless->y == graph[i].y){//found neighbours
-                        xless->left = &graph[i];
-                        graph[i].right = xless;
-                        break;
-                    }
-                    xless+=1;
-                }
-            }
-
-
-        }
 
     }
 
 }
 
 
-int compareFunction(const void *a, const void *b){
+int compareFunctionX(const void *a, const void *b){
     if(*(const unsigned long *)a > *(const unsigned long *)b){
         return 1;
     }
@@ -391,6 +356,25 @@ int compareFunction(const void *a, const void *b){
         const unsigned long *by = (const unsigned long *)b + 1;
         if(*ay>*by)return 1;
         if(*ay<*by)return -1;
+        else {
+            printf("double value detected!\n");
+            printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
+            exit(-1);
+        }
+    }
+}
+
+
+int compareFunctionY(const void *a, const void *b){
+    const unsigned long *ay = (const unsigned long *)a + 1;
+    const unsigned long *by = (const unsigned long *)b + 1;
+    if(*ay>*by)return 1;
+    if(*ay<*by)return -1;
+    else{
+        if(*(const unsigned long *)a > *(const unsigned long *)b){
+            return 1;
+        }
+        if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
         else {
             printf("double value detected!\n");
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
