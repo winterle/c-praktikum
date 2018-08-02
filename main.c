@@ -432,6 +432,7 @@ int getNextLine(){
         }
         tmp[index_tmp] = '\n';
         memcpy(buf,tmp,BUF_LEN*sizeof(char));
+        free(tmp);
     }
     return SUCCESS_CODE;
 }
