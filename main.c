@@ -38,6 +38,8 @@ typedef struct node_s{
 size_t graphSize;
 node_t *graph;
 unsigned long lineNumber;
+/*workaround for qsort allocation, so we have to free and exit after qsort finished when detecting duplicate nodes*/
+int dup;
 
 
 /* function declarations */
@@ -61,12 +63,15 @@ void printMatched();
 
 
 int main(){
+    dup=0;
 
 	parseInput();
 
     qsort(graph,lineNumber, sizeof(node_t), &compareFunctionY);
+    if(dup)die(DOUBLE_VALUE);
 
     findNeighbors();//implicitly calls compareFunctionX
+    if(dup)die(DOUBLE_VALUE);
     #ifdef DEBUG
     printf("neighbors done\n");
     #endif
@@ -345,6 +350,70 @@ int findLongerAugmentations(node_t **queue){
 
 
 void findShortestAugmentations(){
+    int changed = 1;
+    int neighbor_count = 0;
+    enum direction  {left,right,up,down,none};
+    int dir = none;
+    while(changed){
+        changed = 0;
+        for(int i = 0; i < lineNumber; i++){
+            if(graph[i].matchingPartner == NULL){
+                if(graph[i].down != NULL){
+                    if(graph[i].down->matchingPartner == NULL) {
+                        neighbor_count++;
+                        dir = down;
+                    }
+                }
+                if(graph[i].right!=NULL){
+                    if(graph[i].right->matchingPartner == NULL) {
+                        neighbor_count++;
+                        dir = right;
+                    }
+                }
+
+                if(graph[i].up!=NULL){
+                    if(graph[i].up->matchingPartner == NULL) {
+                        neighbor_count++;
+                        dir = up;
+                    }
+                }
+                if(graph[i].left!=NULL){
+                    if(graph[i].left->matchingPartner == NULL) {
+                        neighbor_count++;
+                        dir = left;
+                    }
+                }
+
+                if(neighbor_count<1){
+                    printf("None\n");
+                    free(graph);
+                    exit(SUCCESS_CODE);
+                }
+                if(neighbor_count<2){
+                    changed = 1;
+                    if(dir ==left){
+                        graph[i].matchingPartner = graph[i].left;
+                        graph[i].left->matchingPartner=&graph[i];
+                    }
+                    if(dir ==right){
+                        graph[i].matchingPartner = graph[i].right;
+                        graph[i].right->matchingPartner=&graph[i];
+                    }
+                    if(dir ==up){
+                        graph[i].matchingPartner = graph[i].up;
+                        graph[i].up->matchingPartner=&graph[i];
+                    }
+                    if(dir ==down){
+                        graph[i].matchingPartner = graph[i].down;
+                        graph[i].down->matchingPartner=&graph[i];
+                    }
+                neighbor_count = 0;
+                dir = none;
+                }
+            }
+        }
+    }
+
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL){
             if(graph[i].left != NULL){
@@ -386,7 +455,7 @@ void findNeighbors(){
             }
         }
 
-        //Fixme: this is inefficient AND out of bound checking is not correct
+        //Fixme: this is inefficient AND out of bound checking is not(?) correct
 
         if(graph[i].right == (node_t*)0x01){
             node_t *xmore = &graph[i];
@@ -416,7 +485,7 @@ int compareFunctionX(const void *a, const void *b){
         if(*ay<*by)return -1;
         else {
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
-            die(DOUBLE_VALUE);
+            dup++;
             return 0;
         }
     }
@@ -435,7 +504,7 @@ int compareFunctionY(const void *a, const void *b){
         if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
         else {
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
-            die(DOUBLE_VALUE);
+            dup++;
             return 0;
         }
     }
