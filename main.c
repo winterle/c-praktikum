@@ -4,6 +4,7 @@
 #include <errno.h>
 
 //#define DEBUG
+//#define NOOUT
 /**
  * @author Leander Winter
  * */
@@ -49,12 +50,14 @@ int compareFunctionX(const void *a, const void *b);
 int compareFunctionY(const void *a, const void *b);
 void findNeighbors();
 void findShortestAugmentations();
-int findLongerAugmentations();
+int findLongerAugmentations(node_t **);
 int checkDone();
 void invertPath(node_t *rootNodeReverseDFS);
 void printMatchedNodes();
 static inline unsigned short rootSet(node_t *);
 void reset();
+
+void printMatched();
 
 
 int main(){
@@ -64,12 +67,27 @@ int main(){
     qsort(graph,lineNumber, sizeof(node_t), &compareFunctionY);
 
     findNeighbors();//implicitly calls compareFunctionX
+    #ifdef DEBUG
+    printf("neighbors done\n");
+    #endif
 
     findShortestAugmentations();
+    #ifdef DEBUG
+    printf("shortest done\n");
+    #endif
 
-    while(findLongerAugmentations()>0)reset();
+    node_t **queue = malloc(sizeof(node_t *) * lineNumber);
+    while(findLongerAugmentations(queue)>0)reset();
+    free(queue);
 
-    if(checkDone())printMatchedNodes();
+    if(checkDone()){
+        #ifndef NOOUT
+        //printMatchedNodes();
+        printMatched();
+        #else
+        printf("found solution\n");
+        #endif
+    }
     else printf("None\n");
 
 	free(graph);
@@ -91,7 +109,63 @@ void printMatchedNodes(){
 }
 
 
-/**inverts the augmenting path starting at @param rootNodeReverseDFS*/
+void printMatched(){
+    /*trying to make the least syscalls (printf and further) as possible*/
+
+    unsigned int line_size = 100;
+    unsigned long max_lines = lineNumber/2;
+    unsigned char *output = malloc(sizeof(unsigned char)*line_size*max_lines);
+    unsigned char *position = output;
+    unsigned int lineno = 0; //range 0-1023
+    for(unsigned int i = 0; i < lineNumber; i++){
+        if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
+            lineno++;
+
+            unsigned long x = graph[i].x;
+            for(int j = 9; j > -1; j--){
+                *(position+j) = (x%10)+48;
+                x = x - (x%10);
+                x=x/10;
+            }
+            *(position+10) = ' ';
+            position+=11;
+            unsigned long y = graph[i].y;
+            for(int j = 9; j > -1; j--){
+                *(position+j) = (y%10)+48;
+                y = y - (y%10);
+                y/=10;
+            }
+            *(position+10) = ';';
+            position+=11;
+            x = graph[i].matchingPartner->x;
+            for(int j = 9; j > -1; j--){
+                *(position+j) = (x%10)+48;
+                x = x - (x%10);
+                x/=10;
+            }
+            *(position+10) = ' ';
+            position+=11;
+            y = graph[i].matchingPartner->y;
+            for(int j = 9; j > -1; j--){
+                *(position+j) = (y%10)+48;
+                y = y - (y%10);
+                y/=10;
+            }
+            position+=10;
+            *position = '\n';
+            position++;
+
+        }
+    }
+    *position = '\0';
+
+    printf("%s",output);
+    free(output);
+
+     }
+
+
+/**inverts the augmenting path starting at @param rootNodeReverseDFS, marks used nodes*/
 void invertPath(node_t *rootNodeReverseDFS){
     node_t *curr = rootNodeReverseDFS;
     node_t *before,*tmp;
@@ -112,6 +186,7 @@ void invertPath(node_t *rootNodeReverseDFS){
     }while(curr != NULL);
 }
 
+/**checks if any nodes are already used in other paths, returns 1 if not*/
 int pathValid(node_t *rootNodeReverseDFS){
     node_t *curr = rootNodeReverseDFS;
     do{
@@ -147,19 +222,16 @@ static inline unsigned short rootSet(node_t *node){
 
 
 /**
- * finds and inverts augmentating paths,
+ * finds and inverts augmenting paths,
  * @return 0 when no path can be found since there are no free nodes where the path could end
  * @return 1 when at least one path was found and inverted
  * @return -1 when no path can be found but there are free nodes, meaning the problem is not solvable
  * */
-int findLongerAugmentations(){
+int findLongerAugmentations(node_t **queue){
 #ifdef DEBUG
     printf("enter\n");
 #endif
     /*BFS starting w/ free nodes that are also part of the rootSet*/
-    //continue searching for paths of same lenght, find way to augment them all (can do instantly?)
-    //FIXME queue can be allocated once, keep counter for actually used indices (whats the upper bound for the size of this queue?) -> can be done much more space efficient
-    node_t **queue = malloc(sizeof(node_t *) * lineNumber);
     size_t queuesize = 0;
     short done = 1; //boolean, if we added any new nodes (if not, no more augmenting paths can be found)
     /*initializing the queue w/free nodes */
@@ -182,11 +254,10 @@ int findLongerAugmentations(){
                 queue[queuesize++] = graph[i].down;
                 graph[i].down->prev = &graph[i];
             }
-            //graph[i].prev = (node_t *)0x01; //Flag, that this node cannot be part of any other augmenting paths fixme here
         }
     }
     if(done){
-        free(queue);
+        //free(queue);
         return 0;
     }
     /*now alternately replacing matching partners to queue resp. adding the neighbours to the queue whilst removing the resp. node*/
@@ -202,15 +273,16 @@ int findLongerAugmentations(){
             for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
                 curr = queue[i];
                 if (curr->matchingPartner == NULL){
+                    /*
                     #ifdef DEBUG
                     printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
                     printf("length = %ld ",path_len);
                     #endif
+                     */
                     if(pathValid(curr)) {
                         invertPath(curr);
                     }
                     else {
-
                         #ifdef DEBUG
                         printf("not valid\n");
                         #endif
@@ -220,7 +292,6 @@ int findLongerAugmentations(){
                 }//we can end after this iteration since we found a free node
                 else {
                     queue[i] = curr->matchingPartner;
-                    //curr->matchingPartner->prev = (node_t *) 0x01;fixme here
                 }
             }
         if(path_done)return 1;
@@ -263,7 +334,7 @@ int findLongerAugmentations(){
                 }
             }
         if(!added){
-            free(queue);
+            //free(queue);
             return -1;
         }
         path_len+=2;
@@ -363,9 +434,9 @@ int compareFunctionY(const void *a, const void *b){
         }
         if(*(const unsigned long *)a < *(const unsigned long *)b)return -1;
         else {
-            printf("double value detected!\n");
             printf("ax = %ld, bx = %ld, ay = %ld, by = %ld\n",*(unsigned long *)a, *(unsigned long *)b,*ay,*by);
-            exit(-1);
+            die(DOUBLE_VALUE);
+            return 0;
         }
     }
 }
