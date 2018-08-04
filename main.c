@@ -55,7 +55,6 @@ void findShortestAugmentations();
 int findLongerAugmentations(node_t **);
 int checkDone();
 void invertPath(node_t *rootNodeReverseDFS);
-void printMatchedNodes();
 static inline unsigned short rootSet(node_t *);
 void reset();
 
@@ -97,20 +96,6 @@ int main(){
 
 	free(graph);
 	return 0;
-}
-
-
-void printMatchedNodes(){
-    for(int i = 0; i < lineNumber; i++){
-        if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
-            printf("%ld %ld;%ld %ld\n",graph[i].x,graph[i].y,graph[i].matchingPartner->x,graph[i].matchingPartner->y);
-        }
-#ifdef DEBUG
-        if(graph[i].matchingPartner == NULL){
-            printf("%ld %ld is not matched\n",graph[i].x,graph[i].y);
-        }
-#endif
-    }
 }
 
 
@@ -350,6 +335,7 @@ int findLongerAugmentations(node_t **queue){
 
 
 void findShortestAugmentations(){
+    /*
     int changed = 1;
     int neighbor_count = 0;
     enum direction  {left,right,up,down,none};
@@ -413,6 +399,7 @@ void findShortestAugmentations(){
             }
         }
     }
+     */
 
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL){
