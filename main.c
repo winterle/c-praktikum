@@ -18,12 +18,6 @@
 #define INIT_SIZE 512
 #define BUF_LEN 1024
 
-/*todo list
- * add buffer overflow handler --> done, but weird --> rewrite?
- * further improve neighbor finding
- * improve the queue used in findLongerAugmentations(); pathes of same length in one iteration
- * can reset() be done more efficiently? --> alternate flag values?
- * */
 
 /* global variables and structs */
 char buf[BUF_LEN];
@@ -66,7 +60,7 @@ int main(){
 
 	parseInput();
     /*empty input*/
-    if(lineNumber == 0){
+    if(!lineNumber){
         free(graph);
         exit(0);
     }
@@ -90,7 +84,6 @@ int main(){
 
     if(checkDone()){
         #ifndef NOOUT
-        //printMatchedNodes();
         printMatched();
         #else
         printf("found solution\n");
@@ -104,14 +97,11 @@ int main(){
 
 
 void printMatched(){
-    /*trying to make the least syscalls (printf and further) as possible*/
-
     unsigned int line_size = 100;
     unsigned long max_lines = lineNumber/2;
     unsigned char *output = malloc(sizeof(unsigned char)*line_size*max_lines);
     unsigned char *position = output;
     unsigned int lineno = 0; //range 0-1023
-    printf("linenumber = %ld\n",lineNumber);
     for(unsigned int i = 0; i < lineNumber; i++){
         if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
             lineno++;
@@ -153,10 +143,8 @@ void printMatched(){
         }
     }
     *position = '\0';
-
     printf("%s",output);
     free(output);
-
      }
 
 
@@ -252,7 +240,6 @@ int findLongerAugmentations(node_t **queue){
         }
     }
     if(done){
-        //free(queue);
         return 0;
     }
     /*now alternately replacing matching partners to queue resp. adding the neighbours to the queue whilst removing the resp. node*/
@@ -268,12 +255,6 @@ int findLongerAugmentations(node_t **queue){
             for(size_t i = queuestart; i < queuestart+queuesize;i++) { //replacing matching partners
                 curr = queue[i];
                 if (curr->matchingPartner == NULL){
-                    /*
-                    #ifdef DEBUG
-                    printf("we did it: found free node %ld  %ld, ending BFS\n",curr->x,curr->y);
-                    printf("length = %ld ",path_len);
-                    #endif
-                     */
                     if(pathValid(curr)) {
                         invertPath(curr);
                     }
@@ -329,7 +310,6 @@ int findLongerAugmentations(node_t **queue){
                 }
             }
         if(!added){
-            //free(queue);
             return -1;
         }
         path_len+=2;
@@ -340,71 +320,6 @@ int findLongerAugmentations(node_t **queue){
 
 
 void findShortestAugmentations(){
-    /*
-    int changed = 1;
-    int neighbor_count = 0;
-    enum direction  {left,right,up,down,none};
-    int dir = none;
-    while(changed){
-        changed = 0;
-        for(int i = 0; i < lineNumber; i++){
-            if(graph[i].matchingPartner == NULL){
-                if(graph[i].down != NULL){
-                    if(graph[i].down->matchingPartner == NULL) {
-                        neighbor_count++;
-                        dir = down;
-                    }
-                }
-                if(graph[i].right!=NULL){
-                    if(graph[i].right->matchingPartner == NULL) {
-                        neighbor_count++;
-                        dir = right;
-                    }
-                }
-
-                if(graph[i].up!=NULL){
-                    if(graph[i].up->matchingPartner == NULL) {
-                        neighbor_count++;
-                        dir = up;
-                    }
-                }
-                if(graph[i].left!=NULL){
-                    if(graph[i].left->matchingPartner == NULL) {
-                        neighbor_count++;
-                        dir = left;
-                    }
-                }
-
-                if(neighbor_count<1){
-                    printf("None\n");
-                    free(graph);
-                    exit(SUCCESS_CODE);
-                }
-                if(neighbor_count<2){
-                    changed = 1;
-                    if(dir ==left){
-                        graph[i].matchingPartner = graph[i].left;
-                        graph[i].left->matchingPartner=&graph[i];
-                    }
-                    if(dir ==right){
-                        graph[i].matchingPartner = graph[i].right;
-                        graph[i].right->matchingPartner=&graph[i];
-                    }
-                    if(dir ==up){
-                        graph[i].matchingPartner = graph[i].up;
-                        graph[i].up->matchingPartner=&graph[i];
-                    }
-                    if(dir ==down){
-                        graph[i].matchingPartner = graph[i].down;
-                        graph[i].down->matchingPartner=&graph[i];
-                    }
-                neighbor_count = 0;
-                dir = none;
-                }
-            }
-        }
-    }
-     */
 
     for(int i = 0; i < lineNumber; i++){
         if(graph[i].matchingPartner == NULL){
@@ -446,8 +361,6 @@ void findNeighbors(){
                 graph[i].up = &graph[i+1];
             }
         }
-
-        //Fixme: this is inefficient AND out of bound checking is not(?) correct
 
         if(graph[i].right == (node_t*)0x01){
             node_t *xmore = &graph[i];
