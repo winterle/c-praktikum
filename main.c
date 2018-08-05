@@ -65,7 +65,11 @@ int main(){
     dup=0;
 
 	parseInput();
-
+    /*empty input*/
+    if(lineNumber == 0){
+        free(graph);
+        exit(0);
+    }
     qsort(graph,lineNumber, sizeof(node_t), &compareFunctionY);
     if(dup)die(DOUBLE_VALUE);
 
@@ -107,6 +111,7 @@ void printMatched(){
     unsigned char *output = malloc(sizeof(unsigned char)*line_size*max_lines);
     unsigned char *position = output;
     unsigned int lineno = 0; //range 0-1023
+    printf("linenumber = %ld\n",lineNumber);
     for(unsigned int i = 0; i < lineNumber; i++){
         if(rootSet(&graph[i])&&graph[i].matchingPartner!=NULL){
             lineno++;
