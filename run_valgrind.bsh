@@ -1,0 +1,28 @@
+#!/bin/bash
+make all
+for ((i=1;i<10;i++))
+do
+	echo "----example0"$i"----"
+	cat examples/example0$i.dat | valgrind --leak-check=full ./loesung
+	echo "----done----"
+done
+for ((i=0; i < 2;i++))
+do	
+	echo "----example10"$i"----"
+	cat more_examples/example10$i.dat | valgrind --leak-check=full ./loesung
+	echo "----done----"
+done
+
+for ((i=46; i < 49;i++))
+do
+	echo "----example10"$i"----"
+	cat more_examples/example10$i.dat | valgrind --leak-check=full ./loesung
+	echo "----done----"
+done
+
+for ((i=50; i < 52; i++))
+do
+	echo "----example10"$i"----"
+	cat more_examples/example10$i.dat | valgrind --leak-check=full ./loesung
+	echo "----done----"
+done

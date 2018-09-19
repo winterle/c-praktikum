@@ -1,0 +1,28 @@
+#!/bin/bash
+make all
+for ((i=1;i<10;i++))
+do
+	echo "----example0"$i"----"
+	time cat examples/example0$i.dat | ./loesung | ./check_result examples/example0$i.out
+	echo "----done----"
+done
+for ((i=0; i < 2;i++))
+do	
+	echo "----example10"$i"----"
+	time cat more_examples/example10$i.dat | ./loesung | ./check_result more_examples/example10$i.out
+	echo "----done----"
+done
+
+for ((i=46; i < 49;i++))
+do
+	echo "----example10"$i"----"
+	time cat more_examples/example10$i.dat | ./loesung | ./check_result more_examples/example10$i.out
+	echo "----done----"
+done
+
+for ((i=50; i < 52; i++))
+do
+	echo "----example10"$i"----"
+	time cat more_examples/example10$i.dat | ./loesung | ./check_result more_examples/example10$i.out
+	echo "----done----"
+done
